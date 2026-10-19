@@ -41,3 +41,21 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return self.user.username
+
+
+class JournalistProfile(models.Model):
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="journalist_profile")
+
+    bio = models.TextField(blank=True)
+
+    verified = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def display_name(self):
+        return self.user.get_full_name()
+
+    def __str__(self):
+        return self.display_name or self.user.username

@@ -7,7 +7,7 @@ from django.utils.text import slugify
 
 def generate_unique_slug(instance, value):
     """
-    Create a unique slug for any model that has a slug field.
+    Generate a unique slug for a model instance.
 
     Example:
     breaking-news
@@ -19,9 +19,9 @@ def generate_unique_slug(instance, value):
     slug = base_slug
     counter = 2
 
-    ModelClass = instance.__class__
+    model_class = instance.__class__
 
-    while ModelClass.objects.filter(
+    while model_class.objects.filter(
         slug=slug
     ).exclude(
         pk=instance.pk
@@ -33,11 +33,38 @@ def generate_unique_slug(instance, value):
     return slug
 
 
+def set_publishing_role_snapshot(instance):
+    """
+    Store the journalist's publisher role when the content
+    is first associated with a publisher membership.
+
+    The snapshot will not change after it has been set.
+    """
+
+    if (
+        instance.publisher_membership
+        and not instance.publishing_role_snapshot
+    ):
+        instance.publishing_role_snapshot = (
+            instance.publisher_membership.role
+        )
+
+
+# =========================================================
+# CATEGORY
+# =========================================================
+
 class Category(models.Model):
 
-    name = models.CharField(max_length=100, unique=True)
+    name = models.CharField(
+        max_length=100,
+        unique=True
+    )
 
-    slug = models.SlugField(unique=True, blank=True)
+    slug = models.SlugField(
+        unique=True,
+        blank=True
+    )
 
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -55,11 +82,21 @@ class Category(models.Model):
         verbose_name_plural = "categories"
 
 
+# =========================================================
+# REGION
+# =========================================================
+
 class Region(models.Model):
 
-    name = models.CharField(max_length=100, unique=True)
+    name = models.CharField(
+        max_length=100,
+        unique=True
+    )
 
-    slug = models.SlugField(unique=True, blank=True)
+    slug = models.SlugField(
+        unique=True,
+        blank=True
+    )
 
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -74,6 +111,10 @@ class Region(models.Model):
         return self.name
 
 
+# =========================================================
+# ARTICLE
+# =========================================================
+
 class Article(models.Model):
 
     IMAGE_COUNT_CHOICES = [
@@ -87,39 +128,157 @@ class Article(models.Model):
         ("b", "Layout B"),
     ]
 
-    title = models.CharField(max_length=255)
+    STATUS_CHOICES = [
+        ("draft", "Draft"),
+        ("review", "Under Review"),
+        ("approved", "Approved"),
+        ("published", "Published"),
+    ]
 
-    slug = models.SlugField(unique=True, blank=True)
+    title = models.CharField(
+        max_length=255
+    )
 
-    summary = models.TextField(blank=True)
+    slug = models.SlugField(
+        unique=True,
+        blank=True
+    )
+
+    summary = models.TextField(
+        blank=True
+    )
 
     section_1 = models.TextField()
 
-    section_2 = models.TextField(blank=True)
+    section_2 = models.TextField(
+        blank=True
+    )
 
-    image_count = models.PositiveSmallIntegerField(choices=IMAGE_COUNT_CHOICES, default=1)
+    image_count = models.PositiveSmallIntegerField(
+        choices=IMAGE_COUNT_CHOICES,
+        default=1
+    )
 
-    layout = models.CharField(max_length=1, choices=LAYOUT_CHOICES, default="a")
+    layout = models.CharField(
+        max_length=1,
+        choices=LAYOUT_CHOICES,
+        default="a"
+    )
 
-    image_1 = models.ImageField( upload_to="uploads/articles/", blank=True, null=True)
+    image_1 = models.ImageField(
+        upload_to="uploads/articles/",
+        blank=True,
+        null=True
+    )
 
-    image_2 = models.ImageField(upload_to="uploads/articles/", blank=True, null=True)
+    image_2 = models.ImageField(
+        upload_to="uploads/articles/",
+        blank=True,
+        null=True
+    )
 
-    image_3 = models.ImageField(upload_to="uploads/articles/", blank=True, null=True)
+    image_3 = models.ImageField(
+        upload_to="uploads/articles/",
+        blank=True,
+        null=True
+    )
 
-    journalist = models.ForeignKey("users.JournalistProfile", on_delete=models.SET_NULL, null=True, related_name="articles")
+    # -----------------------------------------------------
+    # AUTHOR / PUBLISHER
+    # -----------------------------------------------------
 
-    publisher = models.ForeignKey("organisation.Publisher", on_delete=models.SET_NULL, null=True, blank=True, related_name="articles")
+    journalist = models.ForeignKey(
+        "users.JournalistProfile",
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="articles"
+    )
 
-    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name="articles")
+    publisher_membership = models.ForeignKey(
+        "organisation.PublisherMembership",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="articles"
+    )
 
-    region = models.ForeignKey(Region, on_delete=models.SET_NULL, null=True, related_name="articles")
+    publishing_role_snapshot = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        editable=False
+    )
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    # -----------------------------------------------------
+    # CATEGORY / REGION
+    # -----------------------------------------------------
 
-    updated_at = models.DateTimeField(auto_now=True)
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="articles"
+    )
+
+    region = models.ForeignKey(
+        Region,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="articles"
+    )
+
+    # -----------------------------------------------------
+    # EDITORIAL WORKFLOW
+    # -----------------------------------------------------
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="draft"
+    )
+
+    reviewed_by = models.ForeignKey(
+        "organisation.PublisherMembership",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_articles"
+    )
+
+    submitted_at = models.DateTimeField(
+        null=True,
+        blank=True
+    )
+
+    approved_at = models.DateTimeField(
+        null=True,
+        blank=True
+    )
+
+    published_at = models.DateTimeField(
+        null=True,
+        blank=True
+    )
+
+    # -----------------------------------------------------
+    # TIMESTAMPS
+    # -----------------------------------------------------
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
+
+    # -----------------------------------------------------
+    # VALIDATION
+    # -----------------------------------------------------
 
     def clean(self):
+
+        # Image validation
 
         if self.image_count >= 1 and not self.image_1:
             raise ValidationError(
@@ -128,12 +287,14 @@ class Article(models.Model):
 
         if self.image_count >= 2 and not self.image_2:
             raise ValidationError(
-                "You selected 2 or more images. Please upload image 2."
+                "You selected 2 or more images. "
+                "Please upload image 2."
             )
 
         if self.image_count == 3 and not self.image_3:
             raise ValidationError(
-                "You selected 3 images. Please upload image 3."
+                "You selected 3 images. "
+                "Please upload image 3."
             )
 
         if self.image_count == 1 and (
@@ -148,6 +309,33 @@ class Article(models.Model):
                 "You selected a 2-image layout."
             )
 
+        # Publisher membership validation
+
+        if (
+            self.publisher_membership
+            and self.publisher_membership.journalist
+            != self.journalist
+        ):
+            raise ValidationError(
+                "The selected publisher membership "
+                "does not belong to this journalist."
+            )
+
+    # -----------------------------------------------------
+    # PROPERTIES
+    # -----------------------------------------------------
+
+    @property
+    def publisher(self):
+        if self.publisher_membership:
+            return self.publisher_membership.publisher
+
+        return None
+
+    @property
+    def publishing_role(self):
+        return self.publishing_role_snapshot
+
     @property
     def template_name(self):
         return (
@@ -155,47 +343,127 @@ class Article(models.Model):
             f"{self.image_count}_image_{self.layout}.html"
         )
 
+    # -----------------------------------------------------
+    # SAVE
+    # -----------------------------------------------------
+
     def save(self, *args, **kwargs):
+
         if not self.slug:
             self.slug = generate_unique_slug(
                 self,
                 self.title
             )
 
+        set_publishing_role_snapshot(self)
+
         super().save(*args, **kwargs)
 
     def __str__(self):
         return self.title
 
+
+# =========================================================
+# NEWSLETTER
+# =========================================================
 
 class Newsletter(models.Model):
 
-    title = models.CharField(max_length=200)
+    title = models.CharField(
+        max_length=200
+    )
 
-    slug = models.SlugField(unique=True, blank=True)
+    slug = models.SlugField(
+        unique=True,
+        blank=True
+    )
 
     description = models.TextField()
 
-    journalist = models.ForeignKey("users.JournalistProfile", on_delete=models.SET_NULL, null=True, related_name="newsletters")
+    journalist = models.ForeignKey(
+        "users.JournalistProfile",
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="newsletters"
+    )
 
-    publisher = models.ForeignKey("organisation.Publisher", on_delete=models.SET_NULL, null=True, blank=True, related_name="newsletters")
+    publisher_membership = models.ForeignKey(
+        "organisation.PublisherMembership",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="newsletters"
+    )
 
-    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name="newsletters")
+    publishing_role_snapshot = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        editable=False
+    )
 
-    region = models.ForeignKey(Region, on_delete=models.SET_NULL, null=True, blank=True, related_name="newsletters")
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="newsletters"
+    )
 
-    image = models.ImageField(upload_to="uploads/newsletters/", blank=True, null=True)
+    region = models.ForeignKey(
+        Region,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="newsletters"
+    )
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    image = models.ImageField(
+        upload_to="uploads/newsletters/",
+        blank=True,
+        null=True
+    )
 
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
+
+    def clean(self):
+
+        if (
+            self.publisher_membership
+            and self.publisher_membership.journalist
+            != self.journalist
+        ):
+            raise ValidationError(
+                "The selected publisher membership "
+                "does not belong to this journalist."
+            )
+
+    @property
+    def publisher(self):
+        if self.publisher_membership:
+            return self.publisher_membership.publisher
+
+        return None
+
+    @property
+    def publishing_role(self):
+        return self.publishing_role_snapshot
 
     def save(self, *args, **kwargs):
+
         if not self.slug:
             self.slug = generate_unique_slug(
                 self,
                 self.title
             )
+
+        set_publishing_role_snapshot(self)
 
         super().save(*args, **kwargs)
 
@@ -203,27 +471,72 @@ class Newsletter(models.Model):
         return self.title
 
 
+# =========================================================
+# SHORT VIDEO
+# =========================================================
+
 class ShortVideo(models.Model):
 
-    title = models.CharField(max_length=200)
+    title = models.CharField(
+        max_length=200
+    )
 
-    video = models.FileField(upload_to="uploads/short_videos/")
+    video = models.FileField(
+        upload_to="uploads/short_videos/"
+    )
 
-    description = models.TextField( blank=True)
+    description = models.TextField(
+        blank=True
+    )
 
-    journalist = models.ForeignKey("users.JournalistProfile", on_delete=models.SET_NULL, null=True, related_name="short_videos")
+    journalist = models.ForeignKey(
+        "users.JournalistProfile",
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="short_videos"
+    )
 
-    publisher = models.ForeignKey("organisation.Publisher", on_delete=models.SET_NULL, null=True, blank=True, related_name="short_videos")
+    publisher_membership = models.ForeignKey(
+        "organisation.PublisherMembership",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="short_videos"
+    )
 
-    duration_seconds = models.PositiveIntegerField(editable=False, null=True, blank=True)
+    publishing_role_snapshot = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        editable=False
+    )
 
-    region = models.ForeignKey(Region, on_delete=models.SET_NULL, null=True, related_name="short_videos")
+    duration_seconds = models.PositiveIntegerField(
+        editable=False,
+        null=True,
+        blank=True
+    )
 
-    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name="short_videos")
+    region = models.ForeignKey(
+        Region,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="short_videos"
+    )
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="short_videos"
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
 
     def clean(self):
+
         if (
             self.duration_seconds is not None
             and self.duration_seconds > 300
@@ -232,9 +545,40 @@ class ShortVideo(models.Model):
                 "Short videos cannot be longer than 5 minutes."
             )
 
+        if (
+            self.publisher_membership
+            and self.publisher_membership.journalist
+            != self.journalist
+        ):
+            raise ValidationError(
+                "The selected publisher membership "
+                "does not belong to this journalist."
+            )
+
+    @property
+    def publisher(self):
+        if self.publisher_membership:
+            return self.publisher_membership.publisher
+
+        return None
+
+    @property
+    def publishing_role(self):
+        return self.publishing_role_snapshot
+
+    def save(self, *args, **kwargs):
+
+        set_publishing_role_snapshot(self)
+
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return self.title
 
+
+# =========================================================
+# LIVE STREAM
+# =========================================================
 
 class LiveStream(models.Model):
 
@@ -244,27 +588,101 @@ class LiveStream(models.Model):
         ("ended", "Ended"),
     ]
 
-    title = models.CharField(max_length=200)
+    title = models.CharField(
+        max_length=200
+    )
 
-    description = models.TextField(blank=True)
+    description = models.TextField(
+        blank=True
+    )
 
-    journalist = models.ForeignKey("users.JournalistProfile", on_delete=models.SET_NULL, null=True, related_name="live_streams" )
+    journalist = models.ForeignKey(
+        "users.JournalistProfile",
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="live_streams"
+    )
 
-    publisher = models.ForeignKey("organisation.Publisher", on_delete=models.SET_NULL, null=True, blank=True, related_name="live_streams")
+    publisher_membership = models.ForeignKey(
+        "organisation.PublisherMembership",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="live_streams"
+    )
+
+    publishing_role_snapshot = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        editable=False
+    )
 
     stream_url = models.URLField()
 
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="scheduled")
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="scheduled"
+    )
 
-    region = models.ForeignKey(Region, on_delete=models.SET_NULL, null=True, related_name="live_streams")
+    region = models.ForeignKey(
+        Region,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="live_streams"
+    )
 
-    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name="live_streams")
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="live_streams"
+    )
 
-    scheduled_for = models.DateTimeField(null=True, blank=True)
+    scheduled_for = models.DateTimeField(
+        null=True,
+        blank=True
+    )
 
-    started_at = models.DateTimeField(null=True, blank=True)
+    started_at = models.DateTimeField(
+        null=True,
+        blank=True
+    )
 
-    ended_at = models.DateTimeField(null=True, blank=True)
+    ended_at = models.DateTimeField(
+        null=True,
+        blank=True
+    )
+
+    def clean(self):
+
+        if (
+            self.publisher_membership
+            and self.publisher_membership.journalist
+            != self.journalist
+        ):
+            raise ValidationError(
+                "The selected publisher membership "
+                "does not belong to this journalist."
+            )
+
+    @property
+    def publisher(self):
+        if self.publisher_membership:
+            return self.publisher_membership.publisher
+
+        return None
+
+    @property
+    def publishing_role(self):
+        return self.publishing_role_snapshot
+
+    def save(self, *args, **kwargs):
+
+        set_publishing_role_snapshot(self)
+
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.title
