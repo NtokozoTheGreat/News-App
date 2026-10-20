@@ -5,6 +5,8 @@ from django.contrib.auth import login, authenticate, logout
 from django.contrib import messages
 from django.db import transaction, IntegrityError
 from .forms import UpdateJournalistProfileForm, UpdateUserDetailsForm, UpdateUserProfileForm
+from django.contrib.auth.decorators import login_required
+
 
 # Create your views here.
 
@@ -92,6 +94,7 @@ def logout_user(request):
     return redirect("home")
 
 
+@login_required
 def update_profile(request):
 
     user = request.user
@@ -158,8 +161,36 @@ def update_profile(request):
         "journalist_form": journalist_form
         })
 
+@login_required
 def become_journalist(request):
-    pass
+    
+    if hasattr(request.user, "journalist_profile"):
+        messages.info(
+            request, "You already have a journalist_profile."
+        )
+        return redirect("home")
+    
+    if request.method == "POST":
+        
+        try:
+            
+            with transaction.atomic():
+                JournalistProfile.objects.create(
+                    user=request.user
+                )
+                
+        except IntegrityError:
+            
+            messages.error(request, "We could'nt create your journalist profile. "
+                          "please try again")
+            
+            return redirect("become_journalist")
+        
+        messages,success(request, "Your journalist profile has been created successfully.")
+        
+        return redirect("update_profile")
+    
+    return render(request, (request, "user/become_journalist.html"))
 
 
 def delete_profile(request):
