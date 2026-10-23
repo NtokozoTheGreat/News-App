@@ -3,7 +3,7 @@ from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserCreationForm
 from content.models import Region
 from .models import UserProfile, JournalistProfile
-from utils.validators import validate_image_upload
+from .utils.validators import validate_image_upload
 
 
 class RegisterForm(UserCreationForm):
@@ -124,7 +124,7 @@ class UpdateUserDetailsForm(forms.ModelForm):
         fields = [
             "username",
             "first_name",
-            "Last_name",
+            "last_name",
             "email"
             ]
 
@@ -165,7 +165,7 @@ class UpdateUserProfileForm(forms.ModelForm):
     class Meta:
 
         model = UserProfile
-        Fields = [
+        fields = [
             "date_of_birth",
             "region",
             "image",
@@ -184,6 +184,7 @@ class UpdateUserProfileForm(forms.ModelForm):
             
             return image
 
+
 class UpdateJournalistProfileForm(forms.ModelForm):
 
     class Meta:
@@ -192,7 +193,7 @@ class UpdateJournalistProfileForm(forms.ModelForm):
         fields = ["bio"]
 
         widgets = {
-            "bio": forms.TextArea(attrs={"class": "form-control",
+            "bio": forms.Textarea(attrs={"class": "form-control",
                                          "rows": 4,
                                          "placeholder": "Tell readers about yourself...",
                                          }

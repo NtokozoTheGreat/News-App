@@ -50,10 +50,6 @@ def set_publishing_role_snapshot(instance):
         )
 
 
-# =========================================================
-# CATEGORY
-# =========================================================
-
 class Category(models.Model):
 
     name = models.CharField(
@@ -82,10 +78,6 @@ class Category(models.Model):
         verbose_name_plural = "categories"
 
 
-# =========================================================
-# REGION
-# =========================================================
-
 class Region(models.Model):
 
     name = models.CharField(
@@ -110,10 +102,6 @@ class Region(models.Model):
     def __str__(self):
         return self.name
 
-
-# =========================================================
-# ARTICLE
-# =========================================================
 
 class Article(models.Model):
 
@@ -195,7 +183,7 @@ class Article(models.Model):
     )
 
     publisher_membership = models.ForeignKey(
-        "organisation.PublisherMembership",
+        "organisations.PublisherMembership",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -227,9 +215,6 @@ class Article(models.Model):
         related_name="articles"
     )
 
-    # -----------------------------------------------------
-    # EDITORIAL WORKFLOW
-    # -----------------------------------------------------
 
     status = models.CharField(
         max_length=20,
@@ -238,7 +223,7 @@ class Article(models.Model):
     )
 
     reviewed_by = models.ForeignKey(
-        "organisation.PublisherMembership",
+        "organisations.PublisherMembership",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -260,10 +245,6 @@ class Article(models.Model):
         blank=True
     )
 
-    # -----------------------------------------------------
-    # TIMESTAMPS
-    # -----------------------------------------------------
-
     created_at = models.DateTimeField(
         auto_now_add=True
     )
@@ -271,10 +252,6 @@ class Article(models.Model):
     updated_at = models.DateTimeField(
         auto_now=True
     )
-
-    # -----------------------------------------------------
-    # VALIDATION
-    # -----------------------------------------------------
 
     def clean(self):
 
@@ -321,10 +298,6 @@ class Article(models.Model):
                 "does not belong to this journalist."
             )
 
-    # -----------------------------------------------------
-    # PROPERTIES
-    # -----------------------------------------------------
-
     @property
     def publisher(self):
         if self.publisher_membership:
@@ -343,9 +316,6 @@ class Article(models.Model):
             f"{self.image_count}_image_{self.layout}.html"
         )
 
-    # -----------------------------------------------------
-    # SAVE
-    # -----------------------------------------------------
 
     def save(self, *args, **kwargs):
 
@@ -362,10 +332,6 @@ class Article(models.Model):
     def __str__(self):
         return self.title
 
-
-# =========================================================
-# NEWSLETTER
-# =========================================================
 
 class Newsletter(models.Model):
 
@@ -388,7 +354,7 @@ class Newsletter(models.Model):
     )
 
     publisher_membership = models.ForeignKey(
-        "organisation.PublisherMembership",
+        "organisations.PublisherMembership",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -471,10 +437,6 @@ class Newsletter(models.Model):
         return self.title
 
 
-# =========================================================
-# SHORT VIDEO
-# =========================================================
-
 class ShortVideo(models.Model):
 
     title = models.CharField(
@@ -497,7 +459,7 @@ class ShortVideo(models.Model):
     )
 
     publisher_membership = models.ForeignKey(
-        "organisation.PublisherMembership",
+        "organisations.PublisherMembership",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -604,7 +566,7 @@ class LiveStream(models.Model):
     )
 
     publisher_membership = models.ForeignKey(
-        "organisation.PublisherMembership",
+        "organisations.PublisherMembership",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,

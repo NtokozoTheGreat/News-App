@@ -1,25 +1,27 @@
 from django.shortcuts import render, redirect
-from . import RegisterForm
 from .models import UserProfile, JournalistProfile
 from django.contrib.auth import login, authenticate, logout
 from django.contrib import messages
 from django.db import transaction, IntegrityError
-from .forms import UpdateJournalistProfileForm, UpdateUserDetailsForm, UpdateUserProfileForm
+from .forms import UpdateJournalistProfileForm, UpdateUserDetailsForm, UpdateUserProfileForm, RegisterForm
 from django.contrib.auth.decorators import login_required
 
 
 # Create your views here.
+
+def home(request):
+    return render(request, 'home.html', {})
 
 
 def register_user(request):
 
     if request.user.is_authenticated:
 
-            messages.info(request,"You are already logged in.")
+        messages.info(request, "You are already logged in.")
 
-            return redirect("home")
+        return redirect("home")
 
-    if request.method=="POST":
+    if request.method =="POST":
         form = RegisterForm(request.POST)
 
         if form.is_valid():
@@ -42,7 +44,7 @@ def register_user(request):
             else: 
                 login(request, user)
                    
-                messages.success(request,"Your account has been created successfully.")
+                messages.success(request, "Your account has been created successfully.")
                 
                 return redirect('home')
             
@@ -61,10 +63,10 @@ def login_user(request):
         
         return redirect("home")
     
-    if request.method=="POST":
+    if request.method =="POST":
         
-        username= request.POST.get('username')
-        password= request.POST.get('password')
+        username = request.POST.get('username')
+        password = request.POST.get('password')
         
         user = authenticate(request, username=username, password=password)
         
@@ -72,12 +74,12 @@ def login_user(request):
             
             login(request, user)
             
-            messages.success(request,"You have successsfully logged in.")
+            messages.success(request, "You have successsfully logged in.")
             
             return redirect("home")
         
         else:
-            messages.error(request,"invaild username or password.")
+            messages.error(request, "invaild username or password.")
             
     return render(request, 'user_login.html')
 
@@ -86,10 +88,10 @@ def logout_user(request):
     
     if not request.user.is_authenticated:
         
-        messages.info(request,"Your already logged out.")
+        messages.info(request, "Your already logged out.")
         
     logout(request)
-    messages.success(request,"you have successfully logged out")
+    messages.success(request, "you have successfully logged out")
     
     return redirect("home")
 
@@ -181,8 +183,7 @@ def become_journalist(request):
                 
         except IntegrityError:
             
-            messages.error(request, "We could'nt create your journalist profile. "
-                          "please try again")
+            messages.error(request, "We could'nt create your journalist profile. ""please try again")
             
             return redirect("become_journalist")
         
@@ -193,5 +194,21 @@ def become_journalist(request):
     return render(request, (request, "user/become_journalist.html"))
 
 
+@login_required
 def delete_profile(request):
-    pass
+    
+    try:
+        journalist_profile = request.user.journalist_profile
+        
+    except JournalistProfile.DoesNotExist:
+        messages.info(request, "YOu dont have a journalist profile to delete.")
+        return redirect("update_profile")
+
+    if request.method == "POST":
+
+        journalist_profile.delete()
+
+        messages.success("Your journalist profile has been deleted.")
+        return redirect("update_profile")
+    
+    return render(request, "user/delete_profile.html")
