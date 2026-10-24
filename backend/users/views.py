@@ -21,7 +21,7 @@ def register_user(request):
 
         return redirect("home")
 
-    if request.method =="POST":
+    if request.method == "POST":
         form = RegisterForm(request.POST)
 
         if form.is_valid():
@@ -41,18 +41,18 @@ def register_user(request):
             except IntegrityError:
                 messages.error(request, "there was a problem creating your account. please try again")
                 
-            else: 
-                login(request, user)
-                   
+            else:
+                login(request, user)  
                 messages.success(request, "Your account has been created successfully.")
-                
                 return redirect('home')
             
         else:
-            
-            form = RegisterForm()
-        
-        return render(request, "user/register.html")
+            messages.error(request, "Please correct the errors below")
+
+    else:
+        form = RegisterForm()
+
+    return render(request, "register.html", {"form": form})
 
 
 def login_user(request):
@@ -81,7 +81,7 @@ def login_user(request):
         else:
             messages.error(request, "invaild username or password.")
             
-    return render(request, 'user_login.html')
+    return render(request, 'user_login.html',{})
 
 
 def logout_user(request):
@@ -110,7 +110,7 @@ def update_profile(request):
         return redirect("home")
     
     try:
-        journalist = user.journalist_profile
+        journalist_profile = user.journalist_profile
         
     except JournalistProfile.DoesNotExist:
         journalist_profile = None
@@ -123,7 +123,7 @@ def update_profile(request):
         
         journalist_form = None
         
-        if JournalistProfile is not None:
+        if journalist_profile is not None:
             
             journalist_form = UpdateJournalistProfileForm(
                 request.POST, instance=journalist_profile,
@@ -132,7 +132,7 @@ def update_profile(request):
         forms_to_validate = [user_form, profile_form]
         
         if journalist_form is not None:
-            forms_to_validate.append(journalist_form)    
+            forms_to_validate.append(journalist_form)
             
         if all(form.is_valid() for form in forms_to_validate):
             with transaction.atomic():
@@ -155,9 +155,9 @@ def update_profile(request):
         journalist_form = None
         
         if journalist_profile is not None:
-            journalist_form = UpdateJournalistProfileForm(instance=profile,)
+            journalist_form = UpdateJournalistProfileForm(instance=journalist_profile,)
     
-    return render(request, "user/update_profile.html", {
+    return render(request, "update_profile.html", {
         "user_form": user_form,
         "profile_form": profile_form,
         "journalist_form": journalist_form
@@ -187,11 +187,11 @@ def become_journalist(request):
             
             return redirect("become_journalist")
         
-        messages,success(request, "Your journalist profile has been created successfully.")
+        messages.success(request, "Your journalist profile has been created successfully.")
         
         return redirect("update_profile")
     
-    return render(request, (request, "user/become_journalist.html"))
+    return render(request, (request, "become_journalist.html", {}))
 
 
 @login_required
@@ -201,14 +201,14 @@ def delete_profile(request):
         journalist_profile = request.user.journalist_profile
         
     except JournalistProfile.DoesNotExist:
-        messages.info(request, "YOu dont have a journalist profile to delete.")
+        messages.info(request, "You dont have a journalist profile to delete.")
         return redirect("update_profile")
 
     if request.method == "POST":
 
         journalist_profile.delete()
 
-        messages.success("Your journalist profile has been deleted.")
+        messages.success(request, "Your journalist profile has been deleted.")
         return redirect("update_profile")
     
-    return render(request, "user/delete_profile.html")
+    return render(request, "delete_profile.html", {})
