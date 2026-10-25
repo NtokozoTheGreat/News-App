@@ -119,8 +119,6 @@ def update_profile(request):
         
         user_form = UpdateUserDetailsForm(request.POST, instance=user,)
         profile_form = UpdateUserProfileForm(request.POST, request.FILES, instance=profile,)
-        journalist_form = UpdateJournalistProfileForm(request.POST, instance=journalist_profile)
-        
         journalist_form = None
         
         if journalist_profile is not None:
@@ -133,18 +131,19 @@ def update_profile(request):
         
         if journalist_form is not None:
             forms_to_validate.append(journalist_form)
-            
-        if all(form.is_valid() for form in forms_to_validate):
-            with transaction.atomic():
-                user_form.save()
-                profile_form.save()
-                
-                if journalist_form is not None:
-                    journalist_form.save()
+
+        if all(form.is_valid() for form in forms_to_validate):   
+    
+                with transaction.atomic():
+                    user_form.save()
+                    profile_form.save()
                     
-            messages.success(request, "Your profile has Update successfully.")
-            return redirect("update_profile")
-        
+                    if journalist_form is not None:
+                        journalist_form.save()
+                
+                messages.success(request, "Your profile has Update successfully.")
+                return redirect("update_profile")
+            
         messages.error(request, "Please correct the errors below")
         
     else:
@@ -191,7 +190,7 @@ def become_journalist(request):
         
         return redirect("update_profile")
     
-    return render(request, (request, "become_journalist.html", {}))
+    return render(request,"become_journalist.html", {})
 
 
 @login_required

@@ -1,1 +1,5 @@
-hello
+{% if journalist_form %}
+    <h3>Journalist Profile</h3>
+
+    {{ journalist_form.as_p }}
+{% endif %}

@@ -170,3 +170,239 @@ class UpdateProfileViewTests(TestCase):
             date(1999, 8, 20),
         )
 
+    def test_journalist_can_update_their_bio(self):
+        journalist_profile = JournalistProfile.objects.create(
+            user=self.user,
+            bio="Original bio",
+        )
+
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse("update_profile"),
+            {
+                "username": self.user.username,
+                "first_name": self.user.first_name,
+                "last_name": self.user.last_name,
+                "email": self.user.email,
+                "date_of_birth": self.profile.date_of_birth.isoformat(),
+                "region": self.profile.region.pk,
+                "bio": "Updated journalist bio",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        
+        journalist_profile.refresh_from_db()
+        self.assertEqual(journalist_profile.bio, "Updated journalist bio")
+        
+        
+    def test_user_cannot_update_another_users_profile(self):
+
+        other_user = User.objects.create_user(
+            username="otheruser",
+            password="OtherPassword123!",
+            first_name="Other",
+            last_name="Person",
+            email="other@example.com",
+        )
+
+        other_profile = UserProfile.objects.create(
+            user=other_user,
+            date_of_birth="1998-05-15",
+            region=self.profile.region,
+        )
+
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse("update_profile"),
+            {
+                "username": "hackedusername",
+                "first_name": "Hacked",
+                "last_name": "User",
+                "email": "hacked@example.com",
+                "date_of_birth": "2000-01-01",
+                "region": self.profile.region.pk,
+            },
+        )
+
+        other_user.refresh_from_db()
+        other_profile.refresh_from_db()
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(other_user.username, "otheruser")
+        self.assertEqual(other_user.first_name, "Other")
+        self.assertEqual(other_user.email, "other@example.com")
+        self.assertEqual(
+            other_profile.date_of_birth.isoformat(),
+            "1998-05-15",
+        )
+
+
+class DeleteProfileViewTests(TestCase):
+
+    def setUp(self):
+        self.user1 = User.objects.create_user(
+            username="user1",
+            password="TestPassword123!",
+        )
+        self.user2 = User.objects.create_user(
+            username="user2",
+            password="TestPassword123!",
+        )
+
+        self.journalist1 = JournalistProfile.objects.create(
+            user=self.user1,
+            bio="First journalist",
+        )
+        self.journalist2 = JournalistProfile.objects.create(
+            user=self.user2,
+            bio="Second journalist",
+        )
+
+    def test_user_can_delete_their_own_journalist_profile(self):
+        self.client.login(
+            username="user1",
+            password="TestPassword123!",
+        )
+
+        response = self.client.post(reverse("delete_profile"))
+        
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("update_profile"))
+        self.assertFalse(
+            JournalistProfile.objects.filter(user=self.user1).exists()
+        )
+        self.assertTrue(
+            JournalistProfile.objects.filter(user=self.user2).exists()
+        )
+        
+    def test_get_request_displays_confirmation_without_deleting_profile(self):
+        self.client.login(
+            username="user1",
+            password="TestPassword123!",
+        )
+
+        response = self.client.get(reverse("delete_profile"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "delete_profile.html")
+
+        self.assertTrue(
+            JournalistProfile.objects.filter(user=self.user1).exists()
+        )
+    
+    def test_unauthenticated_user_is_redirected_to_login(self):
+        response = self.client.get(reverse("delete_profile"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/login/", response.url)
+
+        self.assertTrue(
+            JournalistProfile.objects.filter(user=self.user1).exists()
+        )
+
+    def test_user_without_journalist_profile_is_redirected(self):
+        self.client.login(
+            username="user2",
+            password="TestPassword123!",
+        )
+
+        self.journalist2.delete()
+
+        response = self.client.get(reverse("delete_profile"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("update_profile"))
+
+        self.assertTrue(
+            JournalistProfile.objects.filter(user=self.user1).exists()
+        )
+
+    def test_unauthenticated_user_cannot_update_profile(self):
+        response = self.client.post(
+            reverse("update_profile"),
+            {
+                "username": "hackedusername",
+                "first_name": "Hacked",
+                "last_name": "User",
+                "email": "hacked@example.com",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/accounts/login/", response.url)
+
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.username, "profileuser")
+
+class BecomeJournalistViewTests(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="regularuser",
+            password="TestPassword123!",
+        )
+
+    def test_get_request_displays_page_without_creating_profile(self):
+        self.client.login(
+            username="regularuser",
+            password="TestPassword123!",
+        )
+
+        response = self.client.get(reverse("become_journalist"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "become_journalist.html")
+
+        self.assertFalse(
+            JournalistProfile.objects.filter(user=self.user).exists()
+        )
+    
+    def test_user_can_become_a_journalist(self):
+        self.client.login(
+            username="regularuser",
+            password="TestPassword123!",
+        )
+
+        response = self.client.post(reverse("become_journalist"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("update_profile"))
+
+        self.assertTrue(
+            JournalistProfile.objects.filter(user=self.user).exists()
+        )
+
+    def test_user_with_existing_journalist_profile_cannot_create_another(self):
+        JournalistProfile.objects.create(
+            user=self.user,
+            bio="Existing journalist",
+        )
+
+        self.client.login(
+            username="regularuser",
+            password="TestPassword123!",
+        )
+
+        response = self.client.post(reverse("become_journalist"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("home"))
+
+        self.assertEqual(
+            JournalistProfile.objects.filter(user=self.user).count(),
+            1,
+        )
+        
+    def test_unauthenticated_user_cannot_become_journalist(self):
+        response = self.client.post(reverse("become_journalist"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/login/", response.url)
+
+        self.assertEqual(
+            JournalistProfile.objects.count(),
+            0,
+        )
