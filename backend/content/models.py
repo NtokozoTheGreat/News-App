@@ -171,10 +171,6 @@ class Article(models.Model):
         null=True
     )
 
-    # -----------------------------------------------------
-    # AUTHOR / PUBLISHER
-    # -----------------------------------------------------
-
     journalist = models.ForeignKey(
         "users.JournalistProfile",
         on_delete=models.SET_NULL,
@@ -196,10 +192,6 @@ class Article(models.Model):
         null=True,
         editable=False
     )
-
-    # -----------------------------------------------------
-    # CATEGORY / REGION
-    # -----------------------------------------------------
 
     category = models.ForeignKey(
         Category,
@@ -537,10 +529,6 @@ class ShortVideo(models.Model):
     def __str__(self):
         return self.title
 
-
-# =========================================================
-# LIVE STREAM
-# =========================================================
 
 class LiveStream(models.Model):
 
