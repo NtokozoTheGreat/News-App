@@ -1,9 +1,16 @@
 from django.db import models
-
+from django.db.models import Q
 # Create your models here.
 
 
 class Publisher(models.Model):
+
+    VERIFICATION_CHOICES = [
+        ("unverified", "Unverified"),
+        ("pending", "Verification pending"),
+        ("verified", "Verified"),
+        ("rejected", "Verification rejected"),
+    ]
 
     name = models.CharField(max_length=200, unique=True)
 
@@ -23,6 +30,8 @@ class Publisher(models.Model):
 
     updated_at = models.DateTimeField(auto_now=True)
 
+    verification_status = models.CharField(max_length=20, choices=VERIFICATION_CHOICES, default="unverified")
+
     def __str__(self):
         return self.name
 
@@ -38,6 +47,7 @@ class PublisherMembership(models.Model):
     STATUS_CHOICES = [
         ("pending", "Pending approval"),
         ("active", "Active"),
+        ("inactive", "Inactive"),
         ("rejected", "Rejected"),
     ]
 
@@ -51,10 +61,14 @@ class PublisherMembership(models.Model):
     publisher = models.ForeignKey(Publisher, on_delete=models.CASCADE, related_name="memberships")
 
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="pending")
 
     pending_request = models.CharField(max_length=20, choices=REQUEST_CHOICES, default="join")
 
     joined_at = models.DateTimeField(auto_now_add=True)
+    
+    left_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints = [models.UniqueConstraint(
@@ -64,7 +78,7 @@ class PublisherMembership(models.Model):
         ]
 
     def can_submit_articles(self):
-        return (self.staus == "active" and self.role in [
+        return (self.status == "active" and self.role in [
             "journalist",
             "editor",
             "admin",
@@ -72,21 +86,21 @@ class PublisherMembership(models.Model):
         )
 
     def can_review_articles(self):
-        return (self.staus == "active" and self.role in [
+        return (self.status == "active" and self.role in [
             "editor",
             "admin",
         ]
         )
 
     def can_approve_articles(self):
-        return (self.staus == "active" and self.role in [
+        return (self.status == "active" and self.role in [
             "editor",
             "admin",
         ]
         )
 
     def can_manage_members(self):
-        return (self.staus == "active" and self.role == "admin")
+        return (self.status == "active" and self.role == "admin")
 
     def __str__(self):
         return (
@@ -110,9 +124,11 @@ class MembershipRequest(models.Model):
         ("cancelled", "Cancelled"),
     ]
 
-    memebership = models.ForeignKey(PublisherMembership, on_delete=models.CASCADE, related_name="requests")
+    membership = models.ForeignKey(PublisherMembership, on_delete=models.SET_NULL, null=True, blank=True, related_name="requests")
     
     request_type = models.CharField(max_length=10, choices=REQUEST_CHOICES)
+    
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="pending")
 
     requested_at = models.DateTimeField(auto_now_add=True)
     
@@ -129,9 +145,9 @@ class MembershipRequest(models.Model):
         )
         ]
         
-        ordring = ["-requested_at"]
+        ordering = ["-requested_at"]
         
-        def __str__(self):
+    def __str__(self):
         return (
             f"{self.request_type.title()} request: "
             f"{self.membership} ({self.status})"
