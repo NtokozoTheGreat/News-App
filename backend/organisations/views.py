@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
-from .forms import PublisherRegistrationForm
+from .forms import PublisherRegistrationForm, PublisherUpdateForm
 from .models import PublisherMembership, Publisher
 from django.contrib import messages
 
@@ -64,3 +64,42 @@ def publisher_detail(request, pk):
 
     return render(request, "publisher_detail.html", {"publisher": publisher})
 
+
+
+@login_required
+def update_publisher(request, pk):
+    
+    publisher = get_object_or_404(Publisher, pk=pk)
+    
+    journalist_profile = getattr(request.user, "journalist_profile", None)
+    
+    if journalist_profile is None:
+        messages.error(request, "You do not have permission to update this publisher.")
+        
+        return redirect("pubisher_detail", pk=publisher.pk)
+    
+    is_admin = publisher.memberships.filter(
+        journalist=journalis_porfile,
+        role="admin",
+        status="active"
+    ).exists()
+    
+    if not is_admin:
+        messages.error(request,"Only an admin can update publisher details.")
+        
+        return redirect("publisher_details" pk =publisher.pk)
+    
+    if request.method == "POST":
+        form = PublisherRegistrationForm(request.POST, request.FILES, instance=publisher)
+        
+        if form.is_valid():
+            form.save()
+            
+            messages.success(request, "Publisher details updated successfully")
+            return redirect("publisher_detail", pk=publisher.pk,)
+            
+    else:
+        form = PublisherRegistrationForm(instance=publisher)
+        
+    return render(request, "update_publisher"{"form":form, "publisher": publisher})
+        
