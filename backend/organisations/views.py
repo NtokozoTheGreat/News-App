@@ -325,3 +325,72 @@ def review_membership_request(request,pk , request_id):
             messages.error(request, "this associated membership could not be found")
             
     return redirect("publisher_membership_requests", pk=publisher.pk)
+
+
+@login_required
+@require_POST
+def promote_member(request, pk, membership_id):
+    
+    publisher = get_object_or_404(Publisher, pk=pk)
+    
+    try:
+        
+        journalist_profile = request.user.journalist_profile
+    
+    except JournalistProfile.DoesNotExist:
+        messages.error(request, "you need a admin profile to manage publisher membership. ")
+        
+        return redirect("publisher_detail", pk=publisher.pk)
+    
+    with transaction.atomic():
+        
+        publisher = Publisher.objects.select_for_update().get(pk=publisher.pk)
+        
+        admin_membership = PublisherMembership.objects.select_for_update().filter(
+            publisher=publisher, 
+            journalist=journalist_profile,
+            role="admin",
+            status="active"
+        ).first()
+        
+        if not admin_membership:
+            messages.error(request,"only a publisher admin can promotee members")
+            
+            return redirect("publisher_detail", pk=publisher.pk)
+        
+        membership = PublisherMembership.objects.select_for_update().filter(
+            pk=membership_id,
+            publisher=publisher,
+            status="active"
+        ).first()
+        
+        if not membership:
+            messages.error(request, "the selected member could not be found")
+            
+            return redirect("publisher_members", pk=publisher.pk)
+        
+        if membership.role == "admin":
+            messages.info(request, "this member is already an admin")
+            
+            return redirect("publisher_membership", pk=publisher.pk)
+        
+        if membership.pending_request == "leave":
+            messages.error(request, "a member with a pending leave request cannot be promoted")
+            
+            return redirect("publisher_membership", pk=publisher.pk)
+        
+        membership.role = "admin"
+        
+        membership.save(update_fields=["role"])
+        
+        messages.success(request, f"{membership.journalist} has been promoted to admin")
+        
+    return redirect("publisher_members", pk=publisher.pk)
+
+
+@login_required
+@require_POST
+def demmote_member(request, pk, membership_id):
+    
+    pass
+
