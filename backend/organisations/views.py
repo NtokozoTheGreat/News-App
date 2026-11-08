@@ -392,5 +392,131 @@ def promote_member(request, pk, membership_id):
 @require_POST
 def demmote_member(request, pk, membership_id):
     
-    pass
+    publisher = get_object_or_404(Publisher, pk=pk)
+    
+    new_role = request.POST.get("new_role")
+    
+    if new_role not in ["journal", "editor"]:
+        messages.error(request, "invalid membership role selected.")
+        
+        return redirect("publisher_members", pk=publisher.pk)
+    
+    try:
+        
+        journalis_profile = request.user.journal_profile
+        
+    except JournalistProfile.DoesNotExist:
+        messages.error(request, "you to be an admin to manage publisher membership")
 
+        return redirect("publisher_detail", pk=publisher.pk)
+    
+    with transaction.atomic():
+        
+        publisher = Publisher.objects.select_for_update().get(pk=publisher.pk)
+        
+        admin_membership = PublisherMembership.objects.select_for_update().filter(
+            publisher=publisher,
+            journalist=journalist_profile,
+            role="admin",
+            status="active"
+        ).first()
+        
+        if not admin_membership:
+            messages.error(request, "omly a publisher admin can demote members")
+            
+            return redirect("publisher_detail", pk=publisher.pk)
+        
+        membership = PublisherMembership.objects.select_for_update().filter(
+            pk=membership_id,
+            publisher=publisher,
+            status="active"
+        ).first()
+        
+        if not membership:
+            messages.error(request, "the selected member could not be found ")
+            
+            return redirect("publisher_members", pk=publisher.pk)
+        
+        if membership.pending_request == "leave":
+            messages.error(request, "an admin with a pending leave request cannot change thier role")
+            
+            return redirect("publisher_member"s, pk=publisher.pk)
+        
+        other_admin_exists = PublisherMembership.objects.filter(
+           publisher=publisher,
+           role="admin",
+           status="active"
+        ).exclude(pk=membership.pk).exists()
+        
+        if not other_admin_exists:
+            messages.error(request, 
+                           "This admin cannot be demoted because they are the last active publisher admin. Promote another active member first.")
+            
+            return redirect("publisher_members", pk=publisher.pk)
+        
+        membership.role = new_role
+        
+        membership.save(update_fields=["role"])
+        
+        messages.success(request, f"{membership.journalist} has been demoted to {new_role}")
+        
+    return redirect("publisher_members", pk=publisher.pk)
+
+@login_required
+@require_POST
+def request_to_leave(request, pk):
+    
+    publisher = get_object_or_404(Publisher, pk=pk)
+    
+    try:
+        
+        journalist_profile = request.user.journalist_profile
+        
+    except JournalistProfile.DoesNotExist:
+        messages.error(request, "You need a membership to request to leave.")
+        
+        return redirect("publisher_detail", pk=publisher.pk)
+    
+    try:
+        with transaction.atomic():
+            
+            publisher = Publisher.objects.select_for_update().get(pk=publisher.pk)
+            
+            membership = PublisherMembership.objects.select_for_update().filter(
+                publisher=publisher,
+                journalist=journalist_profile,
+                status="active"
+            ).first()
+            
+            if membership.role == "admin":
+                messages.error(request, "You must be demoted from publisher admin before requesting to leave.")
+                
+                return redirect("publisher_detail", pk=pk)
+            
+            member_requests = MembershipRequest.objects.filter(
+                membership=membership,
+                status="pending").exists()
+            
+            if member_requests:
+                messages.error(request, "you already have a pending membership request.")
+                
+                return redirect("publisher_detail", pk=pk)
+            
+            membership.pending_request = "leave"
+            membership.save(update_fields=["pending_request"])
+            
+            MembershipRequest.objects.create(
+                membership=membership,
+                request_type="leave",
+                status="pending"
+            )
+            
+        messages.success(request, f"Your request to leave {publisher.name} has been submitted.")
+        
+    except Publisher.DoesNotExist:
+        messages.error(request, "Publisher not found")
+        
+    except IntegrityError:
+        messages.error(request, "Your already have a pending membership request.")
+        
+    return redirect("publisher_detail", pk=pk)
