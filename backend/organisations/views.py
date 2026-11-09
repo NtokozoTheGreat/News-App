@@ -94,7 +94,7 @@ def update_publisher(request, pk):
         return redirect("pubisher_detail", pk=publisher.pk)
     
     is_admin = publisher.memberships.filter(
-        journalist=journalis_porfile,
+        journalist=journalist_porfile,
         role="admin",
         status="active"
     ).exists()
@@ -253,7 +253,6 @@ def publisher_membership_request(request, pk):
 
 @login_required
 @require_POST
-
 def review_membership_request(request,pk , request_id):
     
     publisher = get_object_or_404(Publisher,pk=pk)
@@ -462,6 +461,7 @@ def demmote_member(request, pk, membership_id):
         
     return redirect("publisher_members", pk=publisher.pk)
 
+
 @login_required
 @require_POST
 def request_to_leave(request, pk):
@@ -487,6 +487,11 @@ def request_to_leave(request, pk):
                 journalist=journalist_profile,
                 status="active"
             ).first()
+            
+            if membership is None:
+                messages.error(request, "You are not an active member of this publisher.")
+                
+                return redirect("organisations:publisher_detail", pk=pk)
             
             if membership.role == "admin":
                 messages.error(request, "You must be demoted from publisher admin before requesting to leave.")
@@ -520,3 +525,118 @@ def request_to_leave(request, pk):
         messages.error(request, "Your already have a pending membership request.")
         
     return redirect("publisher_detail", pk=pk)
+
+
+@login_required
+def publisher_leave_requests(request, pk=pk):
+    
+    publisher = get_object_or_404(Publisher, pk=pk)
+    
+    admin_membership = get_publisher_admin(request, publisher)
+    
+    if not admin_membership:
+        messages.error(request, "you do not have permission to review leave requests.")
+        
+        return redirect("publisher_detail", pk=publisher.pk)
+    
+    leave_requests = MembershipRequest.objects.filter(
+        membership__publisher=publisher,
+        request_type="leave",
+        status="pending",
+        membership__isnull=False
+    ).select_related("membership",
+                     "membership__journalist",
+                     "membership__journalist__user")
+    
+    context = {"publisher":publisher, "leave_requests": leave_requests}
+    
+    return render(request, "publisher_leave_requests", context)
+
+
+@login_required
+@require_POST
+def review_leave_request(request, pk, request_id):
+    
+    publisher = get_object_or_404(Publisher, pk=pk)
+    
+    decision = request.POST.get("decision")
+    
+    if decision not in ["approve", "reject"]:
+        messages.error(request, "invaild leave request decision.")
+        
+        return redirect("publisher_leave_requests", pk=publisher.pk)
+    
+    try:
+        
+        journalist_profile = request.user.journalist_profile
+        
+    except JournalistProfile.DoesNotExist:
+        messages.error(request, "you need a journalist profile")
+        
+        return redirect("publisher_detail", pk=publisher.pk)
+    
+    try:
+        with transaction.atomic():
+            
+            publisher = Publisher.objects.select_for_update().get(pk=publisher.pk)
+            
+            admin_membership = PublisherMembership.objects.select_for_update().filter(
+                publisher=publisher,
+                journalist=journalist_profile,
+                role="admin",
+                status="active"
+            ).first()
+            
+            if not admin_membership:
+                messages.error(request, "only a publisher member can review leave requests.")
+                
+                return redirect("publisher_detail", pk=publisher.pk)
+            
+            membership_request = MembershipRequest.objects.select_for_update().get(
+                pk=request_id,
+                membership__publisher=publisher,
+                request_type="leave",
+                staus="pending",
+                membership__isnull=False
+                )
+            
+            membership = PublisherMembership.objects.select_for_update().get(
+                pk=membership_request.membership_id,
+                publisher=publisher
+            )
+            
+            if (membership.status != "active" or membership.pending_request != "leave" or membership.role == "admin"):
+                messages.error(request, "this leave request is no longer valid.")
+                
+                return redirect("publisher_leave_requests", pk=publisher.pk)
+            
+            if decision == "approve":
+                
+                membership.status = "inactive"
+                membership.left_at = timezone.now()
+                
+                membership_request.status = "approved"
+                
+                messages.success(request, "the leave request has been approved.")
+            
+            else:
+                
+                membership_request.status = "rejected"
+                messages.success(request, "the leave request has been rejected.")
+                
+                membership.pending_request = "join"
+                membership.save(update_fields=["status", "left_at", "pending_request"])
+                
+                membership_request.reviewed_at = timezone.now()
+                membership_request.reviews_by = admin_membership.journalist
+                
+                membership_request.save(update_fields=["status", "reviewed_at", "reviewed_by"])
+
+    except MembershipRequest.DoesNotExist:
+        messages.error(request, "the associated membership could not be found.")
+        
+    except PublisherMembership.DoesNotExist:
+        messages.error(request, "this associated mebership could not be found.")
+        
+    return redirect("publisher_leave requests", pk=publisher.pk)
+
