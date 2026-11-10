@@ -102,7 +102,7 @@ def update_publisher(request, pk):
     if not is_admin:
         messages.error(request,"Only an admin can update publisher details.")
         
-        return redirect("publisher_details" pk =publisher.pk)
+        return redirect("publisher_details", pk =publisher.pk)
     
     if request.method == "POST":
         form = PublisherRegistrationForm(request.POST, request.FILES, instance=publisher)
@@ -116,7 +116,7 @@ def update_publisher(request, pk):
     else:
         form = PublisherRegistrationForm(instance=publisher)
         
-    return render(request, "update_publisher"{"form":form, "publisher": publisher})
+    return render(request, "update_publisher", {"form":form, "publisher": publisher})
 
 
 @login_required
@@ -194,8 +194,8 @@ def request_to_join(request, pk):
         membership, created = publisher.memberships.get_or_create(
             journalist=journalist_profile,
             defaults={
-                "role": "journalist"
-                "status": "pending"
+                "role": "journalist",
+                "status": "pending",
                 "pending_request": "join"
                 }
         )
@@ -439,7 +439,7 @@ def demmote_member(request, pk, membership_id):
         if membership.pending_request == "leave":
             messages.error(request, "an admin with a pending leave request cannot change thier role")
             
-            return redirect("publisher_member"s, pk=publisher.pk)
+            return redirect("publisher_members", pk=publisher.pk)
         
         other_admin_exists = PublisherMembership.objects.filter(
            publisher=publisher,
@@ -640,3 +640,100 @@ def review_leave_request(request, pk, request_id):
         
     return redirect("publisher_leave requests", pk=publisher.pk)
 
+
+@login_required
+@require_POST
+def remove_member(request, pk, membership_id):
+    
+    journalist_profile = getattr(request.user, "journalist_profile", None)
+    
+    if journalist_profile is None:
+        messages.error(request, "you must have a journalist profile.")
+        
+        return redirect("publisher_detail", pk=pk)
+    
+    try:
+        with transaction.atomic():
+            
+            publisher = Publisher.objects.select_for_update().get(pk=pk)
+            
+            admin_membership = PublisherMembership.objects.select_for_update.filter(
+                journalist=journalist_profile,
+                publisher=publisher,
+                role="admin",
+                status="active"
+            ).first()
+            
+            if admin_membership is None:
+                messages.error(request, "only publisher admins can remove members.")
+                
+                return redirect("publisher_members", pk=pk)
+            
+            membership = PublisherMembership.objects.select_for_update().filter(
+                pk=membership_id,
+                publisher=publisher,
+                status="active"
+            ).first()
+            
+            if membership is None:
+                messages.error(request, "membership not found")
+                
+                return redirect("publisher_members", pk=pk)
+            
+            if membership.role == "admin":
+                
+                other_admin_exists = PublisherMembership.objects.filter(
+                    publisher=publisher,
+                    role="admin",
+                    status="active"
+            ).exclude(pk=membership.pk).exists()
+                
+                if not other_admin_exists:
+                    messages.error(request, "last active admin cannot be removed", pk=pk)
+                    
+                    return redirect("publisher_members", pk=pk)
+                
+            membership.status = "inactive"
+            membership.left_at = timezone.now()
+            membership.pending_request = "join"
+            
+            membership.save(update_fields=["status", "left_at", "pending_request"])
+            
+        messages.success(request, f"{membership.journalist} has been removed from {publisher.name}")
+        
+    except Publisher.DoesNotExist:
+        messages.error(request, "publisher not found.")
+        
+    return redirect("publisher_members", pk=pk)
+
+
+@login_required
+def my_publisher_memberships(request):
+    
+    journalist_profile = getattr(request.user,"journalist_profile", None)
+        
+    if journalist_profile is None:
+        messages.error(request, "you must have  journalist profile to view your publisher memberships")
+        
+        return redirect("home")
+    
+    memberships = PublisherMembership.objects.filter(
+        journalist=journalist_profile).select_related("publiszher").order_by(-joined_at)
+
+    return render(request,"my_publisher_membership.html", {"membership": membership})
+
+
+@login_required
+def my_membership_requests(request):
+    
+    journalist_profile = getattr(request.user, "journalist_profile", None)
+    
+    if journalist_profile is None:
+        messages.error(request, "you must have a journalist profile to view your publisher memberships")
+        
+        return redirect("home")
+    
+    membership_requests =MembershipRequest.objects.filter(
+        membership
+    )
+        
