@@ -733,7 +733,14 @@ def my_membership_requests(request):
         
         return redirect("home")
     
-    membership_requests =MembershipRequest.objects.filter(
-        membership
-    )
-        
+    membership_requests = MembershipRequest.objects.filter(
+        membership__journalist=journalist_profile
+    ).select_related(
+        "membership",
+        "membership__publisher",
+        "reviewed_by",
+        "reviewed_by__user",
+    ).order_by("-requested_at")
+
+    return render(request,"my_membership_requests", {"membership_requests": membership_requests})
+    
