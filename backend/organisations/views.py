@@ -7,6 +7,7 @@ from django.contrib import messages
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from users.models import JournalistProfile
+from .utils.validators import membership_request_coooldown
 
 # Create your views here.
 
@@ -742,5 +743,144 @@ def my_membership_requests(request):
         "reviewed_by__user",
     ).order_by("-requested_at")
 
-    return render(request,"my_membership_requests", {"membership_requests": membership_requests})
+    return render(request, "my_membership_requests", {"membership_requests": membership_requests})
+
+
+@login_required
+@require_POST
+def cancel_join_request(request, request_id):
     
+    journalist_profile = getattr(request.user, "journalist_profile", None)
+    
+    if journalist_profile is None:
+        messages.error(request, "you must have a journalist profile")
+        
+        return redirect("my_membership_requests")
+    
+    membership_request = MembershipRequest.objects.filter(
+        pk=request_id,
+        journalist= journalist_profile,
+        request_type="join",
+        status="pending"
+    ).first()
+    
+    if membership_request is None:
+        messages.error(request, "pending join request not found.")
+        
+        return redirect(my_membership_requests)
+    
+    try:
+        with transaction.atomic():
+            
+            publisher = Publisher.objects.select_for_update().get(
+                pk=membership_request.publisher_id
+            )
+            
+            membership_request = MembershipRequest.objects.select_for_update().filter(
+                pk=request_id,
+                journalist=journalist_profile,
+                publisher=publisher,
+                request_type="join",
+                status="pending"
+            ).select_related("membership").first()
+            
+            if membership_request is None:
+                messages.error(request, "this join request is No longer pending. ")
+                
+                return redirect("my_membership_requests")
+            
+            membership = membership_request.membership
+            
+            if membership is None or membership.status != "pending":
+                messages.error(request, "the associated pending membership could not be found.")
+                
+                return redirect("my_membership_requests")
+            
+            if membership.pending_request != "join":
+                messages.error(request, "this membership is not awaiting a join request.")
+                
+                return redirect("my_membership_requests")
+            
+            membership_request.status = "cancelled"
+            membership_request.reviewd_at = timezone.now()
+            
+            membership_request.save(update_fields=["status", "reviewed_at"])
+            
+            membership.delete()
+        
+        messages.success(request, f"your request to join {publisher.name} has been cancelled.")
+        
+    except Publisher.DoesNotExist:
+        messages.error(request, "publisher not found.")
+        
+    return redirect("my_mebership_requests")
+
+
+@login_required
+@require_POST
+def cancel_leave_request(request, request_id):
+    
+    journalist_profile = getattr(request.user, "journalist_profile", None)
+    
+    if journalist_profile is None:
+        messages.error(request, "you must have a journalist profile")
+        
+        return redirect("my_membership_requests")
+    
+    membership_request = MembershipRequest.objects.filter(
+        pk=request_id,
+        journalist=journalist_profile,
+        request_type="leave",
+        status="pendind"
+    ).first()
+    
+    if membership_request is None:
+        messages.error(request, "pending leave request not found.")
+        
+        return redirect("my_membership_requests")
+    
+    try:
+        with transaction.atomic():
+            
+            publisher = Publisher.objects.select_for_update().get(pk=membership_request.publisher_id)
+            
+            membership_request = MembershipRequest.objects.select_for_update().filter(
+                pk=request_id,
+                journalist=journalist_profile,
+                publisher=publisher,
+                request_type="leave",
+                status="pending"
+            ).select_related("membership").first()
+            
+            if membership_request is None:
+                messages.error(request, "this leave request is no longer pending.")
+                
+                return redirect("my_membership_requests")
+            
+            membership = membership_request.membership
+            
+            if membership is None or membership.status != "active":
+                messages.error(request, "you must have an active membership to cancel a leave request.")
+                
+                return redirect("my_membership_requests")
+            
+            if membership.pending_request != "leave":
+                messages.error(request, "this membership is not awaiting a leave request.")
+                
+                return redirect("my_membership_requests")
+            
+            membership.pending_request = "join"
+            membership.save(update_fields=["pending_request"])
+            
+            membership_request.status = "cancelled"
+            membership_request.reviewed_at = timezone.now()
+            
+            membership_request.save(update_fields=["status", "reviewed_at"])
+            
+        messages.success(request, f"Your request to leave {publisher.name} has been cancelled. Your membership remains active")
+            
+    except Publisher.DoesNotExist:
+        messages.error(request, "Publisher not found.")
+        
+    return redirect("my_membership_requests")
+

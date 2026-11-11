@@ -126,6 +126,10 @@ class MembershipRequest(models.Model):
 
     membership = models.ForeignKey(PublisherMembership, on_delete=models.SET_NULL, null=True, blank=True, related_name="requests")
     
+    journalist = models.ForeignKey("user.JournalistProfile", on_delete=models.CASACADE, related_name="membership_requests")
+    
+    publisher = models.ForeignKey(Publisher, on_delete=models.CASCADE, related_name="membership_requests")
+    
     request_type = models.CharField(max_length=10, choices=REQUEST_CHOICES)
     
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="pending")
