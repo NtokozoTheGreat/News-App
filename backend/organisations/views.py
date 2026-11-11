@@ -7,7 +7,7 @@ from django.contrib import messages
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from users.models import JournalistProfile
-from .utils.validators import membership_request_coooldown
+from .utils.validators import membership_request_cooldown
 
 # Create your views here.
 
@@ -190,39 +190,68 @@ def request_to_join(request, pk):
         
         return redirect("publisher_detail", pk=publisher.pk)
 
-    with transaction.atomic():
-        
-        membership, created = publisher.memberships.get_or_create(
-            journalist=journalist_profile,
-            defaults={
-                "role": "journalist",
-                "status": "pending",
-                "pending_request": "join"
-                }
-        )
-        
-        if membership.status == "active":
-            messages.info(request, "you are already a member of this publisher. ")
+    try:
+        with transaction.atomic():
             
-            return redirect("publisher_detail", pk=publisher.pk)
-        
-        existing_request = membership.requests.filter(status="pending").first()
-        
-        if existing_request:
-            messages.info(request, "you already have a pending membership request.")
+            publisher = Publisher.objects.select_for_update().get(pk=publisher.pk)
             
-            return redirect("publisher_detail, pk=publisher.pk")
-        
-        membership.status = "pending"
-        membership.pending_request = "join"
-        membership.save(update_feilds=["status", "pending_requests"])
-        
-        MembershipRequest.objects.create(membership=membership, request_type="join")
-        
-    messages.success(request, "your request to join this publisher has been submitted.")
+            is_cooling_down, cooldown_expires = membership_request_cooldown(journalist_profile, publisher)
+            
+            if is_cooling_down:
+                messages.error(request, f"You cannot submit another membership request yet. You can try again after {timezone.localtime(cooldown_expires):%d %B %Y at %H:%M}.")
+                
+                return redirect("publisher_detail", pk=publisher.pk)
+            
+            membership, created = publisher.memberships.get_or_create(
+                journalist=journalist_profile,
+                defaults={
+                    "role": "journalist",
+                    "status": "pending",
+                    "pending_request": "join"
+                    }
+            )
+            
+            if membership.status == "active":
+                messages.info(request, "you are already a member of this publisher. ")
+                
+                return redirect("publisher_detail", pk=publisher.pk)
+            
+            existing_request = membership.requests.filter(status="pending").first()
+            
+            if existing_request:
+                messages.info(request, "you already have a pending membership request.")
+                
+                return redirect("publisher_detail, pk=publisher.pk")
+            
+            membership.role = "journalist" 
+            membership.status = "pending"
+            membership.pending_request = "join"
+            membership.left_at = None
+            membership.save(update_feilds=[
+                "status",
+                "pending_request",
+                "left_at"
+                ]
+            )
+            
+            MembershipRequest.objects.create(
+                membership=membership,
+                request_type="join",
+                publisher=publisher,
+                request_type="join",
+                status="pending"
+                )
+            
+        messages.success(request, "your request to join this publisher has been submitted.")
     
+    except Publisher.DoesNotExist:
+        messages.error(request, "publisher not found.")
+    
+    except IntegrityError:
+        messages.error(request, "You already have a pending membership request.")
+
     return redirect("publisher_detail", pk=publisher.pk)
-        
+
 
 @login_required
 def publisher_membership_request(request, pk):
@@ -254,14 +283,14 @@ def publisher_membership_request(request, pk):
 
 @login_required
 @require_POST
-def review_membership_request(request,pk , request_id):
+def review_membership_request(request, pk , request_id):
     
-    publisher = get_object_or_404(Publisher,pk=pk)
+    publisher = get_object_or_404(Publisher, pk=pk)
     
     admin_membership = get_publisher_admin(request, publisher)
     
     if not admin_membership:
-        messages.error(request, "you do not have permission to review membrship requests.")
+        messages.error(request, "you do not have permission to review membership requests.")
         
         return redirect("publisher_detail", pk=publisher.pk)
     
@@ -322,7 +351,7 @@ def review_membership_request(request,pk , request_id):
         messages.error(request, "this membership request could not be found or has already been reviewed.")
         
     except PublisherMembership.DoesNotExist:
-            messages.error(request, "this associated membership could not be found")
+        messages.error(request, "this associated membership could not be found")
             
     return redirect("publisher_membership_requests", pk=publisher.pk)
 
@@ -354,7 +383,7 @@ def promote_member(request, pk, membership_id):
         ).first()
         
         if not admin_membership:
-            messages.error(request,"only a publisher admin can promotee members")
+            messages.error(request, "only a publisher admin can promotee members")
             
             return redirect("publisher_detail", pk=publisher.pk)
         
@@ -403,7 +432,7 @@ def demmote_member(request, pk, membership_id):
     
     try:
         
-        journalis_profile = request.user.journal_profile
+        journalist_profile = request.user.journal_profile
         
     except JournalistProfile.DoesNotExist:
         messages.error(request, "you to be an admin to manage publisher membership")
@@ -483,6 +512,15 @@ def request_to_leave(request, pk):
             
             publisher = Publisher.objects.select_for_update().get(pk=publisher.pk)
             
+            is_cooling_down, cooldown_expires = membership_request_cooldown(journalist_profile, publisher)
+
+            if is_cooling_down:
+                messages.error(request,
+                               f"You cannot submit another membership request yet. You can try again after {timezone.localtime(cooldown_expires):%d %B %Y at %H:%M}.")
+
+                return redirect("organisations:publisher_detail", pk=publisher.pk)
+
+            
             membership = PublisherMembership.objects.select_for_update().filter(
                 publisher=publisher,
                 journalist=journalist_profile,
@@ -513,6 +551,8 @@ def request_to_leave(request, pk):
             
             MembershipRequest.objects.create(
                 membership=membership,
+                journalist=journalist_profile,
+                publisher=publisher,
                 request_type="leave",
                 status="pending"
             )

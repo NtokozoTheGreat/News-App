@@ -3,7 +3,7 @@ from django.utils import timezone
 from organisations.models import MembershipRequest
 
 
-def membership_request_coooldown(journalist, publisher):
+def membership_request_cooldown(journalist, publisher):
     
     cooldown_statuses = ["cancelled", "rejected"]
     
