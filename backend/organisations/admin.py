@@ -13,7 +13,7 @@ class PublisherAdmin(admin.ModelAdmin):
     )
 
     list_filter = (
-        "region"
+        "region",
     )
 
     search_fields = (
@@ -26,7 +26,7 @@ class PublisherAdmin(admin.ModelAdmin):
 class PublisherMembershipAdmin(admin.ModelAdmin):
 
     list_display = (
-         "journalist",
+        "journalist",
         "publisher",
         "role",
         "status"

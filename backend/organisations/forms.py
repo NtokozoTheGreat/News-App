@@ -7,7 +7,7 @@ class PublisherRegistrationForm(forms.ModelForm):
 
     name = forms.CharField(max_length=200, label="Publisher name", help_text="Enter the official name of your news organisation.")
 
-    description = forms.CharField(widgets=forms.Textarea(attrs={"rows": 4}), required=False, label="about the publisher")
+    description = forms.CharField(widget=forms.Textarea(attrs={"rows": 4}), required=False, label="about the publisher")
 
     logo = forms.ImageField(required=False, validators=[validate_image_upload], help_text="Upload a JPEG, PNG or WEbP image (maximum 5 MB).")
 
@@ -31,7 +31,7 @@ class PublisherUpdateForm(forms.ModelForm):
     
         name = forms.CharField(max_length=200, label="Publisher name", help_text="Enter the official name of your news organisation.")
    
-        description = forms.CharField(widgets=forms.Textarea(attrs={"rows": 4}), required=False, label="about the publisher")
+        description = forms.CharField(widget=forms.Textarea(attrs={"rows": 4}), required=False, label="about the publisher")
    
         logo = forms.ImageField(required=False, validators=[validate_image_upload], help_text="Upload a JPEG, PNG or WEbP image (maximum 5 MB).")
    

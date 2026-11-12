@@ -1,5 +1,6 @@
 from django.db import models
 from django.db.models import Q
+from django.conf import settings
 # Create your models here.
 
 
@@ -126,9 +127,9 @@ class MembershipRequest(models.Model):
 
     membership = models.ForeignKey(PublisherMembership, on_delete=models.SET_NULL, null=True, blank=True, related_name="requests")
     
-    journalist = models.ForeignKey("user.JournalistProfile", on_delete=models.CASACADE, related_name="membership_requests")
+    journalist = models.ForeignKey("users.JournalistProfile", on_delete=models.CASCADE, related_name="membership_requests", null=True, blank=True)
     
-    publisher = models.ForeignKey(Publisher, on_delete=models.CASCADE, related_name="membership_requests")
+    publisher = models.ForeignKey(Publisher, on_delete=models.CASCADE, related_name="membership_requests", null=True, blank=True)
     
     request_type = models.CharField(max_length=10, choices=REQUEST_CHOICES)
     
@@ -156,3 +157,34 @@ class MembershipRequest(models.Model):
             f"{self.request_type.title()} request: "
             f"{self.membership} ({self.status})"
         )
+
+
+class AdministrativeCorrection(models.Model):
+
+    FIELD_CHOICES = [
+        ("role", "Membership role"),
+        ("status", "Membership status")
+    ]
+    
+    membership = models.ForeignKey(PublisherMembership, on_delete=models.SET_NULL, null=True, blank=True, related_name="administrative_corrections")
+    
+    field_corrected = models.CharField(max_length=20, choices=FIELD_CHOICES)
+    
+    pervious_value = models.CharField(max_length=20)
+    
+    new_value = models.CharField(max_length=20)
+    
+    reason = models.TextField()
+    
+    corrected_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="administrative_corrections")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        
+        ordering = ["-created_at"]
+        
+    def __str__(self):
+        
+        return (f"{self.field_corrected} correction for {self.membership_reference}")
+    

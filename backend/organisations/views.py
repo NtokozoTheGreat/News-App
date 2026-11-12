@@ -238,7 +238,6 @@ def request_to_join(request, pk):
                 membership=membership,
                 request_type="join",
                 publisher=publisher,
-                request_type="join",
                 status="pending"
                 )
             
@@ -569,7 +568,7 @@ def request_to_leave(request, pk):
 
 
 @login_required
-def publisher_leave_requests(request, pk=pk):
+def publisher_leave_requests(request, pk):
     
     publisher = get_object_or_404(Publisher, pk=pk)
     
