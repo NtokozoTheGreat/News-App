@@ -168,9 +168,11 @@ class AdministrativeCorrection(models.Model):
     
     membership = models.ForeignKey(PublisherMembership, on_delete=models.SET_NULL, null=True, blank=True, related_name="administrative_corrections")
     
+    membership_reference = models.CharField(max_length=255)
+    
     field_corrected = models.CharField(max_length=20, choices=FIELD_CHOICES)
     
-    pervious_value = models.CharField(max_length=20)
+    previous_value = models.CharField(max_length=20)
     
     new_value = models.CharField(max_length=20)
     

@@ -48,3 +48,37 @@ class PublisherUpdateForm(forms.ModelForm):
                 "website",
                 "region",
             ]
+            
+
+class AdiministrativeCorrectionForm(forms.Form):
+    
+    membership = forms.ModelChoiceField(queryset=PublisherMembership.objects.none(), label="Mebership")
+    
+    field_corrected = forms.ChoiceField(choices=[
+        ("role", "Membership role"),
+        ("status", "Membership status")
+        ], label="Field to correct"
+    )
+    
+    new_value = forms.ChoiceField(choices=[], label="New value")
+    
+    reason = forms.CharField(widget=forms.Textarea, label="Reason for correction")
+    
+    def __init__(self, *args, **kwargs):
+        
+        super().__init__(*args, **kwargs)
+        
+        self.fields["membership"].queryset = (PublisherMembership.objects.select_related(
+            "journalist__user",
+            "publisher"
+        ).filter(status="active"))
+        
+        field_corrected = (self.data.get("field_corrected") or self.initial.get("field_corrected"))
+        
+        if field_corrected == "role":
+            
+            self.fields["new_value"].choices = (PublisherMembership.ROLE_CHOICES)
+            
+        elif field_corrected == "status":
+            
+            self.fields["new_value"].choices = (PublisherMembership.STATUS_CHOICES)

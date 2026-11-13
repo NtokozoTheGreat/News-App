@@ -9,6 +9,7 @@ from django.views.decorators.http import require_POST
 from users.models import JournalistProfile
 from .utils.validators import membership_request_cooldown
 
+
 # Create your views here.
 
 def get_publisher_admin(request, publisher):
@@ -774,7 +775,7 @@ def my_membership_requests(request):
         return redirect("home")
     
     membership_requests = MembershipRequest.objects.filter(
-        membership__journalist=journalist_profile
+        journalist=journalist_profile
     ).select_related(
         "membership",
         "membership__publisher",
