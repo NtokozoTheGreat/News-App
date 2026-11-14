@@ -178,6 +178,10 @@ class AdministrativeCorrection(models.Model):
     
     reason = models.TextField()
     
+    publisher_reference = models.CharField(max_length=225, null=True, blank=True)
+    
+    journalist_reference = models.CharField(max_length=225, null=True, blank=True)
+    
     corrected_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="administrative_corrections")
     
     created_at = models.DateTimeField(auto_now_add=True)

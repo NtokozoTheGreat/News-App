@@ -52,7 +52,7 @@ class PublisherUpdateForm(forms.ModelForm):
 
 class AdiministrativeCorrectionForm(forms.Form):
     
-    membership = forms.ModelChoiceField(queryset=PublisherMembership.objects.none(), label="Mebership")
+    membership = forms.ModelChoiceField(queryset=PublisherMembership.objects.none(), label="Membership")
     
     field_corrected = forms.ChoiceField(choices=[
         ("role", "Membership role"),
