@@ -194,3 +194,35 @@ class AdministrativeCorrection(models.Model):
         
         return (f"{self.field_corrected} correction for {self.membership_reference}")
     
+
+class AdministrativeCorrectionReversal(models.Model):
+
+    orignal_correction = models.OneToOneField(AdministrativeCorrection, on_delete=models.PROTECT, related_name="reversal")
+
+    membership = models.ForeignKey(PublisherMembership, on_delete=models.SET_NULL, null=True, blank=True, related_name="administrative_reversals")
+    
+    membership_reference = models.CharField(max_length=223)
+    
+    publisher_reference = models.CharField(max_length=223, null=True, blank=True)
+    
+    journalist_reference = models.CharField(max_length=223, null=True, blank=True)
+    
+    field_corrected = models.CharField(max_length=20)
+    
+    previous_value = models.CharField(max_length=20)
+    
+    restored_value = models.CharField(max_length=20)
+    
+    reason = models.TextField()
+    
+    reversed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="administrative_correction_revesals")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        
+        ordering = ["-created_at"]
+        
+    def __str__(self):
+        
+        return f"revesal of correction #{self.orignal_correction.pk}"

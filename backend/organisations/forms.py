@@ -82,3 +82,8 @@ class AdiministrativeCorrectionForm(forms.Form):
         elif field_corrected == "status":
             
             self.fields["new_value"].choices = (PublisherMembership.STATUS_CHOICES)
+
+
+class AdmininstrativeCorrectionReversalForm(forms.Form):
+
+    reason = forms.CharField(widget=forms.Textarea, widget=forms.Textarea, label="Reason for reversal")

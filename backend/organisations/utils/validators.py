@@ -28,7 +28,7 @@ def membership_request_cooldown(journalist, publisher):
 
 def apply_membership_correction(membership, field_corrected, new_value):
     
-    if filed_corrected not in ["role", "status"]:
+    if field_corrected not in ["role", "status"]:
         
         raise ValueError("Invalid membership field.")
     

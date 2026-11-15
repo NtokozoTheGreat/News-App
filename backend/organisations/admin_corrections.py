@@ -2,8 +2,8 @@ from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import user_passes_test
 from django.db import transaction 
 from django.contrib import messages
-from .models import Publisher, PublisherMembership, AdministrativeCorrection
-from .forms import AdiministrativeCorrectionForm
+from .models import Publisher, PublisherMembership, AdministrativeCorrection, AdministrativeCorrectionReversal
+from .forms import AdiministrativeCorrectionForm, AdmininstrativeCorrectionReversalForm
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from .utils.validators import apply_membership_correction, validate_active_admin_rule
@@ -167,3 +167,100 @@ def administrative_correction_detail(request, pk):
     return render(request, "administrative_correction_detail.html", context)
 
 
+@user_passes_test(lambda user: user.is_superuser)
+def reverse_administrative_correction(request, pk):
+    
+    if request.method == "POST":
+        
+        form = AdmininstrativeCorrectionReversalForm(request.POST)
+        
+        if form.is_valid():
+            
+            reason = form.cleaned_data["reason"].strip()
+            
+            if not reason:
+                form.add_error("reason", "A reason is required.")
+                
+            else:
+                try:
+                    with transaction.atomic():
+                        
+                        membership_id = (AdministrativeCorrection.objects.values_list(
+                            "membership_id", flat=True
+                        ).get(pk=pk))
+                        
+                        if membership_id is None:
+                            raise ValueError("This correction cannot be reversed, associated membership no longer exists.")
+                        
+                        
+                        
+                        publisher_id = (PublisherMembership.objects.values_list(
+                            "publisher_id", flat=True
+                        ).get(pk=membership_id))
+                        
+                        Publisher.objects.select_for_update.get(pk=publisher_id)
+                        
+                        membership = (PublisherMembership.objects.select_for_update().select_related(
+                            "publisher",
+                            "journalist__user"
+                        ).get(pk=membership_id))
+                        
+                        correction = AdministrativeCorrection.objects.select_for_update().get(pk=pk)
+                        
+                        if correction.membership_id is None:
+                            raise ValueError("This correction cannot be reversed, associated membership no longer exists.")
+                        
+                        if AdministrativeCorrectionReversal.objects.filter(original_correction=correction).exists():
+                            raise ValueError("This correction has already been reversed")
+                        
+                        current_value = getattr(membership, correction.field_corrected)
+                        
+                        if current_value != correction.new_value:
+                            raise ValueError("this membership has changed since the original correction. it cannot be automatically reversed.")
+                        
+                        validate_active_admin_rule(
+                            membership,
+                            correction.field_corrected,
+                            correction.previous_value
+                        )
+                        
+                        restored_value = correction.previous_value
+                        
+                        previous_value = apply_membership_correction(
+                            membership,
+                            correction.field_corrected,
+                            restored_value
+                        )
+                        
+                        AdministrativeCorrectionReversal.objects.create(
+                            original_correction=correction,
+                            membership=membership,
+                            membership_reference=correction.membership_reference,
+                            publisher_reference=correction.publisher_reference,
+                            journalist_reference=correction.journalist_reference,
+                            field_corrected=correction.journalist_reference,
+                            previous_value=previous_value,
+                            restored_value=restored_value,
+                            reason=reason,
+                            reversed_by=request.user
+                        )
+                        
+                    messages.success(request, "Administrative correction reversed successfully.")
+                    
+                    return redirect("administrative_correction_detail", pk=pk)
+
+                except AdministrativeCorrection.DoesNotExist:
+                    form.add_error(None, "The administrative correction could not be found.")
+                    
+                except Publisher.DoesNotExist:
+                    form.add_error(None, "The membership associated with this correction no longer exists.")
+                    
+        else:
+            form = AdmininstrativeCorrectionReversalForm()
+            
+        return render(request, "reverse_administrative_correction.html", {
+            "form": form,
+            "correction": get_object_or_404(
+                AdministrativeCorrection, pk=pk
+            )
+        })
