@@ -7,6 +7,7 @@ from .forms import AdiministrativeCorrectionForm, AdmininstrativeCorrectionRever
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from .utils.validators import apply_membership_correction, validate_active_admin_rule
+from django.utils.dateparse import parse_date
 
 
 @user_passes_test(lambda user: user.is_superuser)
@@ -79,7 +80,7 @@ def create_administrative_correction(request):
             
         form = AdiministrativeCorrectionForm()
             
-    return render(request, "create_administravtive_correcrtion.html", {"form": form})
+    return render(request, "create_administravtive_correction.html", {"form": form})
 
 
 @user_passes_test(lambda user: user.is_superuser)
@@ -104,52 +105,52 @@ def administrative_correction_history(request):
             | Q(reason__icontains=search_query)
         )
         
-        field_corrected = request.GET.get("field_corrected", "")
+    field_corrected = request.GET.get("field_corrected", "")
         
-        if field_corrected in ["role", "status"]:
-            
-            corrections = corrections.filter(field_corrected=field_corrected)
-            
-        publisher = request.GET.get("publisher", "").strip()
+    if field_corrected in ["role", "status"]:
         
-        if publisher:
-            
-            corrections = corrections.filter(publisher_reference__iexact=publisher)
-            
-        journalist = request.GET.get("journalist", "").strip()
+        corrections = corrections.filter(field_corrected=field_corrected)
         
-        if journalist:
-            corrections = corrections.filter(journalist_reference__iexact=journalist)
-            
-        corrected_by_id = request.GET.get("corrected_by", "")
+    publisher = request.GET.get("publisher", "").strip()
+    
+    if publisher:
         
-        if corrected_by_id.isdigit():
-            
-            corrections = corrections.filter(corrected_by_id=corrected_by_id)
-            
-        date_from = request.GET.get("date_from", "")
-        date_to = request.GET.get("date_to", "")
+        corrections = corrections.filter(publisher_reference__iexact=publisher)
         
-        if date_from:
-            
-            corrections = corrections.filter(created_at__date__gte=date_from)
-            
-        if date_to:
-            
-            corrections = corrections.filter(created_at_date__lte=date_to)
-            
-        context = {
-            "corrections": corrections,
-            "search_query": search_query,
-            "field_corrected": field_corrected,
-            "publisher": publisher,
-            "journalist": journalist,
-            "corrected_by_id": corrected_by_id,
-            "date_from": date_from,
-            "date_to": date_to,
-            }
+    journalist = request.GET.get("journalist", "").strip()
+    
+    if journalist:
+        corrections = corrections.filter(journalist_reference__iexact=journalist)
         
-        return render(request, "administrative_correction_hisory.html", context)
+    corrected_by_id = request.GET.get("corrected_by", "")
+    
+    if corrected_by_id.isdigit():
+        
+        corrections = corrections.filter(corrected_by_id=corrected_by_id)
+        
+    date_from = request.GET.get("date_from", "")
+    date_to = request.GET.get("date_to", "")
+    
+    if date_from:
+        
+        corrections = corrections.filter(created_at__date__gte=date_from)
+        
+    if date_to:
+        
+        corrections = corrections.filter(created_at__date__lte=date_to)
+        
+    context = {
+        "corrections": corrections,
+        "search_query": search_query,
+        "field_corrected": field_corrected,
+        "publisher": publisher,
+        "journalist": journalist,
+        "corrected_by_id": corrected_by_id,
+        "date_from": date_from,
+        "date_to": date_to,
+        }
+    
+    return render(request, "administrative_correction_hisory.html", context)
     
     
 @user_passes_test(lambda user: user.is_superuser)
@@ -169,6 +170,13 @@ def administrative_correction_detail(request, pk):
 
 @user_passes_test(lambda user: user.is_superuser)
 def reverse_administrative_correction(request, pk):
+    
+    correction = get_object_or_404(AdministrativeCorrection, pk=pk)
+    
+    if correction.membership_id is None:
+        messages.error(reqest, "The membership asssociated with this correction no longer exists")
+        
+        return redirect("admininstrative_correction_deatil", pk=pk)
     
     if request.method == "POST":
         
@@ -198,7 +206,7 @@ def reverse_administrative_correction(request, pk):
                             "publisher_id", flat=True
                         ).get(pk=membership_id))
                         
-                        Publisher.objects.select_for_update.get(pk=publisher_id)
+                        Publisher.objects.select_for_update().get(pk=publisher_id)
                         
                         membership = (PublisherMembership.objects.select_for_update().select_related(
                             "publisher",
@@ -238,7 +246,7 @@ def reverse_administrative_correction(request, pk):
                             membership_reference=correction.membership_reference,
                             publisher_reference=correction.publisher_reference,
                             journalist_reference=correction.journalist_reference,
-                            field_corrected=correction.journalist_reference,
+                            field_corrected=correction.field_corrected,
                             previous_value=previous_value,
                             restored_value=restored_value,
                             reason=reason,
@@ -255,12 +263,95 @@ def reverse_administrative_correction(request, pk):
                 except Publisher.DoesNotExist:
                     form.add_error(None, "The membership associated with this correction no longer exists.")
                     
-        else:
-            form = AdmininstrativeCorrectionReversalForm()
+                except PublisherMembership.DoesNotExist:
+                    form.add_error(None, "The membership associated with this correction no longer exists.")
+                    
+                except ValueError as error:
+                    form.add_error(None, str(error))
+                    
+    else:
+        form = AdmininstrativeCorrectionReversalForm()
+        
+    return render(request, "reverse_administrative_correction.html", {
+        "form": form,
+        "correction": get_object_or_404(
+            AdministrativeCorrection, pk=pk
+        )
+    })
+
+
+@user_passes_test(lambda user: user.is_superuser)
+def administrative_correction_reversal_history(request):
+    
+    reversals = (AdministrativeCorrectionReversal.objects.select_related(
+        "original_correction",
+        "membership",
+        "membership__publisher",
+        "membership__journalist__user",
+        "reversed_by"
+    ).all())
+    
+    search_query = request.GET.get("search", "").strip()
+    
+    if search_query:
+        
+        reversals = reversals.filter(
+            Q(membership_reference__icontains=search_query)
+            | Q(publisher_reference__icontains=search_query)
+            | Q(journalist_reference__icontains=search_query)
+            | Q(reason__icontains=search_query)
+        )
+        
+    original_correction = request.GET.get("original_correction", "").strip()
+    
+    if original_correction.isdigit():
+        
+        reversals = reversals.filter(original_correction_id=original_correction)
+        
+    reversed_by_id = request.GET.get("reversed_by", "").strip()
+    
+    if reversed_by_id.isdigit():
+        
+        reversals = reversals.filter(reversed_by_id=reversed_by_id)
+        
+    date_from = request.GET.get("date_from", "").strip()
+    date_to = request.GET.get("date_to", "").strip()
+    
+    parsed_date_from = parse_date(date_from) if date_from else None
+    parsed_date_to = parse_date(date_to) if date_to else None
+    
+    date_error = None
+    
+    if date_from and parsed_date_from is None:
+        
+        date_error = "invalid start date"
+        
+    elif date_to and parsed_date_to is None:
+        
+        date_error = "Invalid end date"
+        
+    elif (parsed_date_from and parsed_date_to and parsed_date_from > parsed_date_to):
+        
+        date_error = "The start date cannot be later than the end date."
+    
+    if not date_error:
+        
+        if parsed_date_from:
             
-        return render(request, "reverse_administrative_correction.html", {
-            "form": form,
-            "correction": get_object_or_404(
-                AdministrativeCorrection, pk=pk
-            )
-        })
+            reversals = reversals.filter(created_at__date__gte=parsed_date_from)
+            
+        if parsed_date_to:
+            
+            reversals = reversals.filter(created_at__date__lte=parsed_date_to)
+            
+    context = {
+        "reversals": reversals,
+        "search_query": search_query,
+        "original_correction": original_correction,
+        "reversed_by_id": reversed_by_id,
+        "date_from": date_from,
+        "date_to": date_to,
+        "date_error": date_error
+    }
+
+    return render(request, "administrative_correction_reversal_history.html", context)
