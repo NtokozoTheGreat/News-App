@@ -14,7 +14,7 @@ from .utils.validators import membership_request_cooldown
 
 def get_publisher_admin(request, publisher):
     
-    journalist_profile = getattr(request.user, journalist_profile, None)
+    journalist_profile = getattr(request.user, "journalist_profile", None)
     
     if journalist_profile is None:
         return None
@@ -44,7 +44,7 @@ def register_publisher(request):
                     with transaction.atomic():
                         
                         publisher = form.save(commit=False)
-                        publisher. verifivation_status = "unverified"
+                        publisher.verification_status = "unverified"
                         publisher.save()
                         
                         PublisherMembership.objects.create(
@@ -60,26 +60,26 @@ def register_publisher(request):
                     
                 else: 
                     messages.success(request, "Your publisher has been registered successfully.")
-                    return redirect("organisation:publisher_detail", pk=publisher.pk)
+                    return redirect("organisations:publisher_detail", pk=publisher.pk)
                 
     else:
         form = PublisherRegistrationForm()
         
-    return render(request, "register_publisher.html", {"form": form})
+    return render(request, "organisations/register_publisher.html", {"form": form})
 
 
 def publisher_list(request):
 
     publishers = Publisher.objects.order_by("name")
 
-    return render(request, "publisher_list.html", {"publishers": publishers})
+    return render(request, "organisations/publisher_list.html", {"publishers": publishers})
 
 
 def publisher_detail(request, pk):
 
     publisher = get_object_or_404(Publisher, pk=pk)
 
-    return render(request, "publisher_detail.html", {"publisher": publisher})
+    return render(request, "organisations/publisher_detail.html", {"publisher": publisher})
 
 
 
@@ -93,18 +93,12 @@ def update_publisher(request, pk):
     if journalist_profile is None:
         messages.error(request, "You do not have permission to update this publisher.")
         
-        return redirect("pubisher_detail", pk=publisher.pk)
+        return redirect("organisation:pubisher_detail", pk=publisher.pk)
     
-    is_admin = publisher.memberships.filter(
-        journalist=journalist_porfile,
-        role="admin",
-        status="active"
-    ).exists()
-    
-    if not is_admin:
-        messages.error(request,"Only an admin can update publisher details.")
-        
-        return redirect("publisher_details", pk =publisher.pk)
+    if get_publisher_admin(request, publisher) is None:
+        messages.error(request, "only an admin can update publisher details.")
+
+        return redirect("organisations:publisher_detail", pk=publisher.pk)
     
     if request.method == "POST":
         form = PublisherRegistrationForm(request.POST, request.FILES, instance=publisher)
@@ -113,12 +107,12 @@ def update_publisher(request, pk):
             form.save()
             
             messages.success(request, "Publisher details updated successfully")
-            return redirect("publisher_detail", pk=publisher.pk,)
+            return redirect("organisations:publisher_detail", pk=publisher.pk,)
             
     else:
         form = PublisherRegistrationForm(instance=publisher)
         
-    return render(request, "update_publisher", {"form":form, "publisher": publisher})
+    return render(request, "organisations/update_publisher", {"form": form, "publisher": publisher})
 
 
 @login_required

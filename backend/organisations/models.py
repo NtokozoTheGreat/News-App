@@ -197,7 +197,7 @@ class AdministrativeCorrection(models.Model):
 
 class AdministrativeCorrectionReversal(models.Model):
 
-    orignal_correction = models.OneToOneField(AdministrativeCorrection, on_delete=models.PROTECT, related_name="reversal")
+    original_correction = models.OneToOneField(AdministrativeCorrection, on_delete=models.PROTECT, related_name="reversal")
 
     membership = models.ForeignKey(PublisherMembership, on_delete=models.SET_NULL, null=True, blank=True, related_name="administrative_reversals")
     
@@ -225,4 +225,4 @@ class AdministrativeCorrectionReversal(models.Model):
         
     def __str__(self):
         
-        return f"revesal of correction #{self.orignal_correction.pk}"
+        return f"revesal of correction #{self.original_correction.pk}"

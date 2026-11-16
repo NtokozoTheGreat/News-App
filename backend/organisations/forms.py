@@ -11,7 +11,7 @@ class PublisherRegistrationForm(forms.ModelForm):
 
     logo = forms.ImageField(required=False, validators=[validate_image_upload], help_text="Upload a JPEG, PNG or WEbP image (maximum 5 MB).")
 
-    webiste = forms.URLField(required=False, label="Official website", validators=[validate_website_url], help_text="Enter your website address, including https://")
+    website = forms.URLField(required=False, label="Official website", validators=[validate_website_url], help_text="Enter your website address, including https://")
 
     class Meta:
 
@@ -86,4 +86,4 @@ class AdiministrativeCorrectionForm(forms.Form):
 
 class AdmininstrativeCorrectionReversalForm(forms.Form):
 
-    reason = forms.CharField(widget=forms.Textarea, widget=forms.Textarea, label="Reason for reversal")
+    reason = forms.CharField(widget=forms.Textarea, label="Reason for reversal")
