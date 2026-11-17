@@ -93,7 +93,7 @@ def update_publisher(request, pk):
     if journalist_profile is None:
         messages.error(request, "You do not have permission to update this publisher.")
         
-        return redirect("organisation:pubisher_detail", pk=publisher.pk)
+        return redirect("organisations:publisher_detail", pk=publisher.pk)
     
     if get_publisher_admin(request, publisher) is None:
         messages.error(request, "only an admin can update publisher details.")
@@ -110,9 +110,9 @@ def update_publisher(request, pk):
             return redirect("organisations:publisher_detail", pk=publisher.pk,)
             
     else:
-        form = PublisherRegistrationForm(instance=publisher)
+        form = PublisherUpdateForm(instance=publisher)
         
-    return render(request, "organisations/update_publisher", {"form": form, "publisher": publisher})
+    return render(request, "organisations/update_publisher.html", {"form": form, "publisher": publisher})
 
 
 @login_required

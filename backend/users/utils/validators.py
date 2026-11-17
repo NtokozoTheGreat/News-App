@@ -51,7 +51,7 @@ def validate_website_url(url):
 
     url = url.strip()
 
-    if not url.lower().startwith("htts://"):
+    if not url.lower().startswith("https://"):
         raise ValidationError("the website address must start with https://")
 
     try:
