@@ -1,7 +1,7 @@
 from django.test import TestCase
 from django.contrib.auth.models import User
 from django.urls import reverse
-from organisations.models import Publisher, PublisherMembership
+from models import Publisher, PublisherMembership, MembershipRequest
 from users.models import JournalistProfile
 
 # Create your tests here.
@@ -10,13 +10,38 @@ from users.models import JournalistProfile
 class PublisherRegistrationTests(TestCase):
     
     def setUp(self):
-        
+
         self.user = User.objects.create_user(
             username="journalist1",
             password="testpassword123"
         )
         
-        self.journalist_profile = JournalistProfile.objects.create(user=self.user)
+        self.pending_membership = PublisherMembership.objects.create(
+            journalist=JournalistProfile.objects.create(
+                user=User.objects.create_user(
+                    username="pending_journalist",
+                    password="testpassword123"
+                )
+            ), publisher=self.publisher, role="journalist", status="incative"
+        )
+        
+        self.inactive_membership = PublisherMembership.objects.create(
+            journalist=JournalistProfile.objects.create(
+                user=User.objects.create_user(
+                    username="inactive_journalist",
+                    password="testpassword123"
+                )
+            ), publisher=self.publisher, role="journalist", status="incative"
+        )
+
+        self.rejected_membership = PublisherMembership.objects.create(
+                    journalist=JournalistProfile.objects.create(
+                        user=User.objects.create_user(
+                            username="inactive_journalist",
+                            password="testpassword123"
+                        )
+                    ), publisher=self.publisher, role="journalist", status="incative"
+                )
         
         self.url = reverse("organisations:register_publisher")
         
@@ -286,3 +311,116 @@ class PublisherUpdateTests(TestCase):
         
         self.assertEqual(response.status_code, 302)
         self.assertEqual(self.publisher.name, "Daily News")
+        
+
+class PublisherMembersTests(TestCase):
+    
+    def setUp(self):
+        
+        self.admin_user = User.objects.create_user(
+            username="publisher_admin",
+            password="testpassword123"
+        )
+        
+        self.admin_profile = JournalistProfile.objects.create(
+            user=self.admin_user
+        )
+        
+        self.publisher = Publisher.objects.create(name="Daily News")
+        
+        self.admin_membership = PublisherMembership.objects.create(
+            journalist=self.admin_profile,
+            publisher=self.publisher,
+            role="admin",
+            status="active"
+        )
+        
+        self.url = reverse("organisations:publisher_members",
+                           kwargs={"pk": self.publisher.pk})
+        
+    def test_active_admin_can_access_members_page(self):
+        
+        self.client.login(
+            username="publisher_admin",
+            password="testpassword123"
+        )
+        
+        response = self.client.get(self.url)
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["publisher"], self.publisher)
+        
+    def test_non_admin_cannot_access_members_page(self):
+        
+        user = User.objects.create_user(
+            username="journalist",
+            password="testpassword123"
+        )
+        
+        profile = JournalistProfile.objects.create(user=user)
+        
+        PublisherMembership.objects.create(
+            journalist=profile,
+            publisher=self.publisher,
+            role="journalist",
+            status="active"
+        )
+        
+        self.client.login(
+            username="journalist",
+            password="testpassword123"
+        )
+        
+        response = self.client.get(self.url)
+        
+        self.assertRedirects(response, reverse(
+            "organisations:publisher_detail", kwargs={"pk": self.publisher.pk}
+        ))
+        
+    def test_user_without_journalist_profile_cannot_access_members_page(self):
+        
+        user = User.objects.create_user(
+          username="ordinary_user",
+            password="testpassword123"  
+        )
+        
+        self.client.login(
+            username="ordinary_user",
+            password="testpassword123"
+        )
+        
+        response = self.client.get(self.url)
+        
+        self.assertRedirects(response, reverse(
+            "organisations:publisher_detail",
+            kwargs={"pk": self.publisher.pk}
+        ))
+        
+    def test_membership_counts_are_correct(self):
+        
+        self.client.login(
+            username="publisher_admin",
+            password="testpassword123" 
+        )
+        
+        response = self.client.get(self.url)
+        
+        self.assertEqual(response.context["active_count"], 2)
+        self.assertEqual(response.context["pending_count"], 1)
+        self.assertEqual(response.context["inactive_count"], 1)
+        self.assertEqual(response.context["rejected_count"], 1)
+        self.assertEqual(response.context["pending_leave_count"], 1)
+        self.assertEqual(response.context["total_count"], 5)
+        
+    def test_invalid_status_filter_defaults_to_active(self):
+        
+        self.client.login(
+            username="publisher_admin",
+            password="testpassword123"
+        )
+        
+        response = self.client.get(self.url, {"status": "invalid"})
+        
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(response.context["membership_status"], "active")
+        self.assertEqual(response.context["memberships"].count(), 2)

@@ -125,7 +125,7 @@ def publisher_members(request, pk):
     if not admin_membership:
         messages.error(request, "you don't have permission to manage this publisher's mebmers .")
         
-        return redirect("publisher_detail", pk=publisher.pk)
+        return redirect("organisations:publisher_detail", pk=publisher.pk)
     
     active_count = publisher.memberships.filter(status="active").count()
     
@@ -135,7 +135,7 @@ def publisher_members(request, pk):
     
     rejected_count = publisher.memberships.filter(status="rejected").count()
     
-    pending_leave_count = publisher.memberships.filter(requests__request_type="leave", requests__status="pending").count()
+    pending_leave_count = publisher.memberships.filter(requests__request_type="leave", requests__status="pending").distinct().count()
     
     total_count = publisher.memberships.count()
     
@@ -152,7 +152,7 @@ def publisher_members(request, pk):
         memberships = memberships.filter(request__request_type="leave", requests__status="pending").distinct()
     
     elif membership_status != "all":
-        memberships = memberships.select_related(status= membership_status)
+        memberships = memberships.filter(status=membership_status)
         
     memberships = memberships.order_by("role", "journalist__user__username")
     
@@ -168,7 +168,7 @@ def publisher_members(request, pk):
         "total_count": total_count,
             }
     
-    return render(request, "publisher_members.html", context)
+    return render(request, "memberships/publisher_members.html", context)
     
     
 @login_required
