@@ -188,3 +188,133 @@ class PublisherMembersTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["membership_status"], "active")
         self.assertEqual(response.context["memberships"].count(), 2)
+        
+
+class RequestToJoin(TestCase):
+    
+    def setUp(self):
+        
+        self.user = User.objects.create_user(
+            username="joining_journalist",
+            password="testpassword123"
+        )
+        
+        self.journalist_profile = JournalistProfile.objects.create(
+            user=self.user
+        )
+        
+        self.publisher = Publisher.objects.create(
+            name="Daily News"
+        )
+        
+        self.url = reverse("organisations:request_to_join",
+                           kwargs={"pk": self.publisher.pk})
+        
+    def test_user_without_journalist_profile_cannot_request_to_join(self):
+        
+        user = User.objects.create_user(
+            username="ordinary_user",
+            password="testpassword123"
+        )
+        
+        self.client.login(
+            username="ordinary_user",
+            password="testpassword123"
+        )
+        
+        response = self.client.post(self.url)
+        
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(PublisherMembership.objects.filter(
+                publisher=self.publisher
+            ).exists()
+        )
+        
+    def test_new_journalist_can_request_to_join(self):
+        
+        self.client.login(
+            username="joining_journalist",
+            password="testpassword123"
+        )
+        
+        response = self.client.post(self.url)
+        
+        membership = PublisherMembership.objects.get(
+            journalist=self.journalist_profile,
+            publisher=self.publisher
+        )
+        
+        self.assertEqual(membership.role, "journalist")
+        self.assertEqual(membership.status, "pending")
+        self.assertEqual(membership.pending_request, "join")
+        
+        self.assertTrue(MembershipRequest.objects.filter(
+            membership=membership,
+            request_type="join",
+            status="pending"
+            ).exists()
+        )
+        
+        self.assertEqual(response.status_code, 302)
+        
+    def test_active_member_cannot_submit_another_join_request(self):
+        
+        PublisherMembership.objects.create(
+           journalist=self.journalist_profile,
+            publisher=self.publisher,
+            role="journalist",
+            status="active" 
+        )
+        
+        self.client.login(
+            username="joining_journalist",
+            password="testpassword123"
+        )
+        
+        response = self.client.post(self.url)
+        
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(MembershipRequest.objects.count(), 0)
+        
+    def test_existing_pending_request_is_not_duplicated(self):
+        
+        membership = PublisherMembership.objects.create(
+            journalist=self.journalist_profile,
+            publisher=self.publisher,
+            role="journalist",
+            status="pending"
+        )
+        
+        MembershipRequest.objects.create(
+            membership=membership,
+            journalist=self.journalist_profile,
+            publisher=self.publisher,
+            request_type="join",
+            status="pending"
+        )
+        
+        self.client.login(
+            username="joining_journalist",
+            password="testpassword123"
+        )
+        
+        response = self.client.post(self.url)
+        
+        print("STATUS:", response.status_code)
+        print("REASON:", response.reason_phrase)
+        print("HOST:", response.wsgi_request.get_host())
+        print("LOCATION:", response.get("Location"))
+                
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(MembershipRequest.objects.count(), 1)
+        
+    def test_get_reuqest_is_not_allowed(self):
+        
+        self.client.login(
+            username="joining_journalist",
+            password="testpassword123"
+        )
+        
+        response = self.client.get(self.url)
+        
+        self.assertEqual(response.status_code, 405)

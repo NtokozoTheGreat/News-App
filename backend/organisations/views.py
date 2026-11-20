@@ -183,7 +183,7 @@ def request_to_join(request, pk):
     except JournalistProfile.DoesNotExist:
         messages.error(request, "you need a journalist profile before requesting to join a publisher.")
         
-        return redirect("publisher_detail", pk=publisher.pk)
+        return redirect("organisations:publisher_detail", pk=publisher.pk)
 
     try:
         with transaction.atomic():
@@ -195,7 +195,7 @@ def request_to_join(request, pk):
             if is_cooling_down:
                 messages.error(request, f"You cannot submit another membership request yet. You can try again after {timezone.localtime(cooldown_expires):%d %B %Y at %H:%M}.")
                 
-                return redirect("publisher_detail", pk=publisher.pk)
+                return redirect("organisations:publisher_detail", pk=publisher.pk)
             
             membership, created = publisher.memberships.get_or_create(
                 journalist=journalist_profile,
@@ -209,20 +209,21 @@ def request_to_join(request, pk):
             if membership.status == "active":
                 messages.info(request, "you are already a member of this publisher. ")
                 
-                return redirect("publisher_detail", pk=publisher.pk)
+                return redirect("organisations:publisher_detail", pk=publisher.pk)
             
             existing_request = membership.requests.filter(status="pending").first()
             
             if existing_request:
                 messages.info(request, "you already have a pending membership request.")
                 
-                return redirect("publisher_detail, pk=publisher.pk")
+                return redirect("organisations:publisher_detail", pk=publisher.pk)
             
-            membership.role = "journalist" 
+            membership.role = "journalist"
             membership.status = "pending"
             membership.pending_request = "join"
             membership.left_at = None
-            membership.save(update_feilds=[
+            membership.save(update_fields=[
+                "role",
                 "status",
                 "pending_request",
                 "left_at"
@@ -244,7 +245,7 @@ def request_to_join(request, pk):
     except IntegrityError:
         messages.error(request, "You already have a pending membership request.")
 
-    return redirect("publisher_detail", pk=publisher.pk)
+    return redirect("organisations:publisher_detail", pk=publisher.pk)
 
 
 @login_required
