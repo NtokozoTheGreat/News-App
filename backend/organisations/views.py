@@ -258,7 +258,7 @@ def publisher_membership_request(request, pk):
     if not admin_membership:
         messages.error(request, "you do not have permission to review membership reequests.")
         
-        return redirect("publisher_detail", pk=publisher.pk)
+        return redirect("organisations:publisher_detail", pk=publisher.pk)
     
     membership_requests = MembershipRequest.objects.filter(
         membership__publisher=publisher,
@@ -267,13 +267,13 @@ def publisher_membership_request(request, pk):
         membership__isnull=False).select_related(
             "membership",
             "membership__journalist",
-            "membership__journal__user"
+            "membership__journalist__user"
         )
         
     context = {"publisher": publisher,
                "membership_requests": membership_requests}
     
-    return render(request, "publisher_membership_requests.html", context)
+    return render(request, "memberships/publisher_membership_requests.html", context)
 
 
 @login_required

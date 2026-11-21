@@ -318,3 +318,118 @@ class RequestToJoin(TestCase):
         response = self.client.get(self.url)
         
         self.assertEqual(response.status_code, 405)
+
+
+class PublisherMembershipRequestTests(TestCase):
+    
+    def setUp(self):
+        
+        self.admin_user = User.objects.create_user(
+            username="publisher_admin",
+            password="testpassword123"
+        )
+        
+        self.admin_profile = JournalistProfile.objects.create(
+            user=self.admin_user
+        )
+        
+        self.publisher = Publisher.objects.create(name="Daily News")
+        
+        self.url = reverse("organisations:publisher_membership_requests",
+                           kwargs={"pk": self.publisher.pk})
+        
+        PublisherMembership.objects.create(
+            journalist=self.admin_profile,
+            publisher=self.publisher,
+            role="admin",
+            status="active"
+        )
+        
+        self.applicant_user = User.objects.create_user(
+            username="applicant",
+            password="testpassword123"
+        )
+        
+        self.applicant_profile = JournalistProfile.objects.create(
+            user=self.applicant_user
+        )
+        
+        self.applicant_membership = PublisherMembership.objects.create(
+            journalist=self.applicant_profile,
+            publisher=self.publisher,
+            role="journalist",
+            status="pending"
+        )
+        
+        self.join_request = MembershipRequest.objects.create(
+            membership=self.applicant_membership,
+            journalist=self.applicant_profile,
+            publisher=self.publisher,
+            request_type="join",
+            status="pending"
+        )
+        
+    def test_active_admin_can_access_membership_requests(self):
+        
+        self.client.login(
+            username="publisher_admin",
+            password="testpassword123"
+        )
+        
+        response = self.client.get(self.url)
+        
+        self.assertEqual(response.status_code, 200)
+        
+    def test_non_admin_cannot_acccess_membership_requests(self):
+        
+        self.client.login(
+            username="applicant",
+            password="testpassword123"
+        )
+        
+        response = self.client.get(self.url)
+        
+        self.assertRedirects(response, reverse("organisations:publisher_detail", 
+                                               kwargs={"pk": self.publisher.pk}))
+        
+    def test_user_withou_journalist_profile_cannot_access_membership_request(self):
+        
+        user = User.objects.create_user(
+            username="ordinary_user",
+            password="testpassword123"
+        )
+        
+        self.client.login(
+            username="ordinary_user",
+            password="testpassword123"
+        )
+        
+        response = self.client.get(self.url)
+        
+        self.assertRedirects(response, reverse("organisations:publisher_detail",
+                                               kwargs={"pk": self.publisher.pk}))
+
+        
+    def test_only_pending_join_requests_for_pubisher_are_displayed(self):
+        
+        self.client.login(
+            username="publisher_admin",
+            password="testpassword123"
+        )
+        
+        response = self.client.get(self.url)
+        
+        self.assertQuerySetEqual(response.context["membership_requests"],
+                                 [self.join_request])
+        
+        
+    def test_publisher_is_in_context(self):
+        
+        self.client.login(
+            username="publisher_admin",
+            password="testpassword123"
+        )
+        
+        response = self.client.get(self.url)
+        
+        self.assertEqual(response.context["publisher"], self.publisher)
