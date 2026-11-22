@@ -730,4 +730,170 @@ class PromoteMemberTests(TestCase):
         response = self.client.get(self.url)
         
         self.assertEqual(response.status_code, 405)
+
+
+class DemoteMemberTests(TestCase):
+    
+    def setUp(self):
         
+        self.admin_user = User.objects.create_user(
+            username="publisher_admin",
+            password="testpassword123"
+        )
+        
+        self.admin_profile = JournalistProfile.objects.create(
+            user=self.admin_user
+        )
+        
+        self.target_user = User.objects.create_user(
+            username="target_admin",
+            password="testpassword123"
+        )
+        
+        self.target_profile = JournalistProfile.objects.create(
+            user=self.target_user
+        )
+        
+        self.member_user = User.objects.create_user(
+            username="regular_member",
+            password="testpassword123" 
+        )
+        
+        self.member_profile = JournalistProfile.objects.create(
+            user=self.member_user
+        )
+        
+        self.publisher = Publisher.objects.create(name="Daily News")
+        
+        self.admin_membership = PublisherMembership.objects.create(
+            journalist=self.admin_profile,
+            publisher=self.publisher,
+            role="admin",
+            status="active"
+        )
+        
+        self.target_admin_membership = PublisherMembership.objects.create(
+            journalist=self.target_profile,
+            publisher=self.publisher,
+            role="admin",
+            status="active"
+        )
+        
+        self.member_membership = PublisherMembership.objects.create(
+            journalist=self.member_profile,
+            publisher=self.publisher,
+            role="journalist",
+            status="active"
+        )
+        
+        self.url = reverse("organisations:demote_member",
+                           kwargs={"pk": self.publisher.pk,
+                                   "membership_id": self.target_admin_membership.pk})
+        
+        self.client.login(
+            username="publisher_admin",
+            password="testpassword123"
+        )
+        
+    def test_active_admin_can_demote_another_admin(self):
+        
+        response = self.client.post(self.url, {"new_role": "journalist"})
+        
+        self.assertEqual(response.status_code, 302)
+        
+        self.target_admin_membership.refresh_from_db()
+        self.assertEqual(self.target_admin_membership.role, "journalist")
+        
+    def test_non_admin_cannot_demote_member(self):
+        
+        self.client.login(
+            username="regular_member",
+            password="testpassword123"
+        )
+        
+        response = self.client.post(self.url, {"new_role": "journalist"})
+        
+        self.assertEqual(response.status_code, 302)
+        
+        self.target_admin_membership.refresh_from_db()
+        self.assertEqual(self.target_admin_membership.role, "admin")
+        
+    def test_user_without_journalist_profile_cannot_demote_member(self):
+        
+        user = User.objects.create_user(
+            username="ordinary_user",
+            password="testpassword123"
+        )
+        
+        self.client.login(
+            username="ordinary_user",
+            password="testpassword123" 
+        )
+        
+        response = self.client.post(self.url, {"new_role": "journalist"})
+        
+        self.assertEqual(response.status_code, 302)
+        
+        self.target_admin_membership.refresh_from_db()
+        self.assertEqual(self.target_admin_membership.role, "admin")
+        
+    def test_non_admin_cannot_be_demoted(self):
+        
+        url = reverse("organisations:demote_member", kwargs={
+            "pk": self.publisher.pk, "membership_id": self.member_membership.pk})
+        
+        response = self.client.post(url, {"new_role": "editor"})
+        
+        self.assertEqual(response.status_code, 302)
+        
+        self.member_membership.refresh_from_db()
+        self.assertEqual(self.member_membership.role, "journalist")
+        
+    def test_last_active_cannot_be_demoted(self):
+        
+        self.target_admin_membership.status = "inactive"
+        self.target_admin_membership.save(update_fields=["status"])
+        
+        urls = reverse("organisations:demote_member", kwargs={
+            "pk": self.publisher.pk,
+            "membership_id": self.admin_membership.pk
+        })
+        
+        response = self.client.post(self.url, {"new_role": "journalist"})
+        
+        self.assertEqual(response.status_code, 302)
+        
+        self.admin_membership.refresh_from_db()
+        self.assertEqual(self.admin_membership.role, "admin")
+        
+    def test_admin_with_pending_leave_request_cannot_be_demoted(self):
+        
+        MembershipRequest.objects.create(
+            membership=self.target_admin_membership,
+            journalist=self.target_profile,
+            publisher=self.publisher,
+            request_type="leave",
+            status="pending"
+        )
+        
+        response = self.client.post(self.url, {"new_role": "journalist"})
+        
+        self.assertEqual(response.status_code, 302)
+        
+        self.target_admin_membership.refresh_from_db()
+        self.assertEqual(self.target_admin_membership.role, "admin")
+        
+    def test_invalid_role_is_rejected(self):
+        
+        response = self.client.post(self.url, {"new_role": "superuser"})
+        
+        self.assertEqual(response.status_code, 302)
+        
+        self.target_admin_membership.refresh_from_db()
+        self.assertEqual(self.target_admin_membership.role, "admin")
+        
+    def test_get_request_is_not_allowed(self):
+        
+        response = self.client.get(self.url)
+        
+        self.assertEqual(response.status_code, 405)

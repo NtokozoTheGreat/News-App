@@ -429,19 +429,19 @@ def demmote_member(request, pk, membership_id):
     
     new_role = request.POST.get("new_role")
     
-    if new_role not in ["journal", "editor"]:
+    if new_role not in ["journalist", "editor"]:
         messages.error(request, "invalid membership role selected.")
         
-        return redirect("publisher_members", pk=publisher.pk)
+        return redirect("organisations:publisher_members", pk=publisher.pk)
     
     try:
         
-        journalist_profile = request.user.journal_profile
+        journalist_profile = request.user.journalist_profile
         
     except JournalistProfile.DoesNotExist:
         messages.error(request, "you to be an admin to manage publisher membership")
 
-        return redirect("publisher_detail", pk=publisher.pk)
+        return redirect("organisations:publisher_detail", pk=publisher.pk)
     
     with transaction.atomic():
         
@@ -457,7 +457,7 @@ def demmote_member(request, pk, membership_id):
         if not admin_membership:
             messages.error(request, "omly a publisher admin can demote members")
             
-            return redirect("publisher_detail", pk=publisher.pk)
+            return redirect("organisations:publisher_detail", pk=publisher.pk)
         
         membership = PublisherMembership.objects.select_for_update().filter(
             pk=membership_id,
@@ -468,12 +468,17 @@ def demmote_member(request, pk, membership_id):
         if not membership:
             messages.error(request, "the selected member could not be found ")
             
-            return redirect("publisher_members", pk=publisher.pk)
+            return redirect("organisations:publisher_members", pk=publisher.pk)
         
-        if membership.pending_request == "leave":
+        if membership.role != "admin":
+            messages.error(request, "The selected member is not publisher admin.")
+            
+            return redirect("organisations:publisher_members", pk=publisher.pk)
+        
+        if membership.requests.filter(request_type="leave", status="pending").exists():
             messages.error(request, "an admin with a pending leave request cannot change thier role")
             
-            return redirect("publisher_members", pk=publisher.pk)
+            return redirect("organisations:publisher_members", pk=publisher.pk)
         
         other_admin_exists = PublisherMembership.objects.filter(
            publisher=publisher,
@@ -485,7 +490,7 @@ def demmote_member(request, pk, membership_id):
             messages.error(request, 
                            "This admin cannot be demoted because they are the last active publisher admin. Promote another active member first.")
             
-            return redirect("publisher_members", pk=publisher.pk)
+            return redirect("organisations:publisher_members", pk=publisher.pk)
         
         membership.role = new_role
         
@@ -493,7 +498,7 @@ def demmote_member(request, pk, membership_id):
         
         messages.success(request, f"{membership.journalist} has been demoted to {new_role}")
         
-    return redirect("publisher_members", pk=publisher.pk)
+    return redirect("organisations:publisher_members", pk=publisher.pk)
 
 
 @login_required
