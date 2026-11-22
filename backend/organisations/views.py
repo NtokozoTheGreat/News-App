@@ -287,24 +287,33 @@ def review_membership_request(request, pk , request_id):
     if not admin_membership:
         messages.error(request, "you do not have permission to review membership requests.")
         
-        return redirect("publisher_detail", pk=publisher.pk)
+        return redirect("organisations:publisher_detail", pk=publisher.pk)
     
     decision = request.POST.get("decision")
     
     if decision not in ["approve", "reject"]:
         messages.error(request, "invalid membership decision.")
         
-        return redirect("publisher_membership_requests", pk=publisher.pk)
+        return redirect("organisations:publisher_membership_requests", pk=publisher.pk)
     
     try:
         with transaction.atomic():
             
+            publisher = Publisher.objects.select_for_update().get(pk=pk)
+            
+            admin_membership = get_publisher_admin(request, publisher)
+            
+            if not admin_membership:
+                messages.error(request, "You dont have permission to review membership requests.")
+                
+                return redirect("organisations:publisher_detail", pk=publisher.pk)
+            
             membership_request = MembershipRequest.objects.select_for_update().get(
                 pk=request_id,
-                membershup__publisher=publisher,
+                membership__publisher=publisher,
                 request_type="join",
                 status="pending",
-                membership_isnull=False
+                membership__isnull=False
             )
             
             membership = PublisherMembership.objects.select_for_update().get(
@@ -315,7 +324,7 @@ def review_membership_request(request, pk , request_id):
             if membership.status != "pending":
                 messages.error(request, "this membership request is no longer pending.")
                 
-                return redirect("publisher_membership_requests", pk=publisher.pk)
+                return redirect("organisations:publisher_membership_requests", pk=publisher.pk)
             
             if decision == "approve":
                 
@@ -329,7 +338,7 @@ def review_membership_request(request, pk , request_id):
                 
             else:
                 
-                membership.status == "rejected"
+                membership.status = "rejected"
                 
                 membership_request.status = "rejected"
                 
@@ -348,7 +357,7 @@ def review_membership_request(request, pk , request_id):
     except PublisherMembership.DoesNotExist:
         messages.error(request, "this associated membership could not be found")
             
-    return redirect("publisher_membership_requests", pk=publisher.pk)
+    return redirect("organisations:publisher_membership_requests", pk=publisher.pk)
 
 
 @login_required
@@ -364,14 +373,14 @@ def promote_member(request, pk, membership_id):
     except JournalistProfile.DoesNotExist:
         messages.error(request, "you need a admin profile to manage publisher membership. ")
         
-        return redirect("publisher_detail", pk=publisher.pk)
+        return redirect("organisations:publisher_detail", pk=publisher.pk)
     
     with transaction.atomic():
         
         publisher = Publisher.objects.select_for_update().get(pk=publisher.pk)
         
         admin_membership = PublisherMembership.objects.select_for_update().filter(
-            publisher=publisher, 
+            publisher=publisher,
             journalist=journalist_profile,
             role="admin",
             status="active"
@@ -380,7 +389,7 @@ def promote_member(request, pk, membership_id):
         if not admin_membership:
             messages.error(request, "only a publisher admin can promotee members")
             
-            return redirect("publisher_detail", pk=publisher.pk)
+            return redirect("organisations:publisher_detail", pk=publisher.pk)
         
         membership = PublisherMembership.objects.select_for_update().filter(
             pk=membership_id,
@@ -391,25 +400,25 @@ def promote_member(request, pk, membership_id):
         if not membership:
             messages.error(request, "the selected member could not be found")
             
-            return redirect("publisher_members", pk=publisher.pk)
+            return redirect("organisations:publisher_members", pk=publisher.pk)
         
         if membership.role == "admin":
             messages.info(request, "this member is already an admin")
             
-            return redirect("publisher_membership", pk=publisher.pk)
+            return redirect("organisations:publisher_members", pk=publisher.pk)
         
-        if membership.pending_request == "leave":
+        if membership.requests.filter(request_type="leave",
+                                      status="pending").exists():
             messages.error(request, "a member with a pending leave request cannot be promoted")
             
-            return redirect("publisher_membership", pk=publisher.pk)
+            return redirect("organisations:publisher_members", pk=publisher.pk)
         
         membership.role = "admin"
-        
         membership.save(update_fields=["role"])
         
         messages.success(request, f"{membership.journalist} has been promoted to admin")
         
-    return redirect("publisher_members", pk=publisher.pk)
+    return redirect("organisations:publisher_members", pk=publisher.pk)
 
 
 @login_required
