@@ -1,6 +1,6 @@
 from django.test import TestCase
 from django.contrib.auth.models import User
-from django.urls import reverse
+from django.urls import reverse, resolve
 from organisations.models import Publisher, PublisherMembership, MembershipRequest
 from users.models import JournalistProfile
 
@@ -897,3 +897,137 @@ class DemoteMemberTests(TestCase):
         response = self.client.get(self.url)
         
         self.assertEqual(response.status_code, 405)
+
+   
+class RequestToLeaveTests(TestCase):
+    
+    def setUp(self):
+        
+        self.user = User.objects.create_user(
+            username="journalist",
+            password="testpassword123"
+        )
+        
+        self.journalist_profile = JournalistProfile.objects.create(
+            user=self.user
+        )
+        
+        self.publisher = Publisher.objects.create(name="Daily News")
+        
+        self.membership = PublisherMembership.objects.create(
+            journalist=self.journalist_profile,
+            publisher=self.publisher,
+            role="journalist",
+            status="active"
+        )
+        
+        self.url = reverse("organisations:request_to_leave",
+                           kwargs={"pk": self.publisher.pk})
+        
+        self.client.login(
+            username="journalist",
+            password="testpassword123" 
+        )
+        
+    def test_active_member_can_request_to_leave(self):
+        
+        response = self.client.post(self.url)
+        
+        self.assertEqual(response.status_code, 302)
+        
+        self.membership.refresh_from_db()
+        self.assertEqual(self.membership.pending_request, "leave")
+        
+        leave_request = MembershipRequest.objects.get(
+            membership=self.membership,
+            request_type="leave",
+            status="pending"
+        )
+        
+        self.assertIsNotNone(leave_request)
+        
+    def test_user_without_journalist_profile_cannot_request_to_leave(self):
+        
+        user = User.objects.create_user(
+            username="ordinary_user",
+            password="testpassword123"
+        )
+        
+        self.client.login(
+            username="ordinary_user",
+            password="testpassword123"
+        )
+        
+        response = self.client.post(self.url)
+        
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(MembershipRequest.objects.filter(
+            publisher=self.publisher,
+            request_type="leave"
+        ).exists())
+        
+    def test_non_member_cannot_request_to_leave(self):
+        
+        self.membership.delete()
+        
+        response = self.client.post(self.url)
+        
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(MembershipRequest.objects.filter(
+            publisher=self.publisher,
+            request_type= "leave"
+        ).exists())
+        
+    def test_inactive_member_cannot_request_to_leave(self):
+        
+        self.membership.status = "inactive"
+        self.membership.save(update_fields=["status"])
+        
+        response = self.client.post(self.url)
+        
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(MembershipRequest.objects.filter(
+            membership=self.membership,
+            request_type="leave"
+        ).exists())
+        
+    def test_admin_cannot_request_to_leave_before_demotion(self):
+        
+        self.membership.role = "admin"
+        self.membership.save(update_fields=["role"])
+        
+        response = self.client.post(self.url)
+        
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(MembershipRequest.objects.filter(
+            membership=self.membership,
+            request_type="leave"
+        ).exists())
+    
+    def test_member_with_pending_request_cannot_submit_another(self):
+            
+        MembershipRequest.objects.create(
+            membership=self.membership,
+            journalist=self.journalist_profile,
+            publisher=self.publisher,
+            request_type="join",
+            status="pending"
+        )
+        
+        response = self.client.post(self.url)
+                
+        self.assertEqual(response.status_code, 302)
+
+        self.assertEqual(MembershipRequest.objects.filter(
+            membership=self.membership, status="pending").count(), 1)
+
+    def test_get_request_is_not_allowed(self):
+        
+        response = self.client.get(self.url)
+        
+        self.assertEqual(response.status_code, 405)
+        
+                
+        
+                
+            

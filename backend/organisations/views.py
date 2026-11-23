@@ -514,7 +514,7 @@ def request_to_leave(request, pk):
     except JournalistProfile.DoesNotExist:
         messages.error(request, "You need a membership to request to leave.")
         
-        return redirect("publisher_detail", pk=publisher.pk)
+        return redirect("organisations:publisher_detail", pk=publisher.pk)
     
     try:
         with transaction.atomic():
@@ -528,8 +528,7 @@ def request_to_leave(request, pk):
                                f"You cannot submit another membership request yet. You can try again after {timezone.localtime(cooldown_expires):%d %B %Y at %H:%M}.")
 
                 return redirect("organisations:publisher_detail", pk=publisher.pk)
-
-            
+ 
             membership = PublisherMembership.objects.select_for_update().filter(
                 publisher=publisher,
                 journalist=journalist_profile,
@@ -539,21 +538,22 @@ def request_to_leave(request, pk):
             if membership is None:
                 messages.error(request, "You are not an active member of this publisher.")
                 
-                return redirect("organisations:publisher_detail", pk=pk)
+                return redirect("organisations:publisher_detail", pk=publisher.pk)
             
             if membership.role == "admin":
                 messages.error(request, "You must be demoted from publisher admin before requesting to leave.")
                 
-                return redirect("publisher_detail", pk=pk)
+                return redirect("organisations:publisher_detail", pk=publisher.pk)
             
-            member_requests = MembershipRequest.objects.filter(
+            pending_requests_exists = MembershipRequest.objects.filter(
                 membership=membership,
-                status="pending").exists()
+                status="pending"
+            ).exists()
             
-            if member_requests:
-                messages.error(request, "you already have a pending membership request.")
+            if pending_requests_exists:
+                messages.error(request, "You already have a pending membership request.")
                 
-                return redirect("publisher_detail", pk=pk)
+                return redirect("organisations:publisher_detail", pk=publisher.pk)
             
             membership.pending_request = "leave"
             membership.save(update_fields=["pending_request"])
@@ -574,7 +574,7 @@ def request_to_leave(request, pk):
     except IntegrityError:
         messages.error(request, "Your already have a pending membership request.")
         
-    return redirect("publisher_detail", pk=pk)
+    return redirect("organisations:publisher_detail", pk=publisher.pk)
 
 
 @login_required
