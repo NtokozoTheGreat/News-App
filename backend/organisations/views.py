@@ -587,7 +587,7 @@ def publisher_leave_requests(request, pk):
     if not admin_membership:
         messages.error(request, "you do not have permission to review leave requests.")
         
-        return redirect("publisher_detail", pk=publisher.pk)
+        return redirect("organisations:publisher_detail", pk=publisher.pk)
     
     leave_requests = MembershipRequest.objects.filter(
         membership__publisher=publisher,
@@ -598,9 +598,9 @@ def publisher_leave_requests(request, pk):
                      "membership__journalist",
                      "membership__journalist__user")
     
-    context = {"publisher":publisher, "leave_requests": leave_requests}
+    context = {"publisher": publisher, "leave_requests": leave_requests}
     
-    return render(request, "publisher_leave_requests", context)
+    return render(request, "memberships/publisher_leave_requests", context)
 
 
 @login_required

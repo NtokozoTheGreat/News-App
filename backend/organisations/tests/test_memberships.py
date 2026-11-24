@@ -3,7 +3,8 @@ from django.contrib.auth.models import User
 from django.urls import reverse, resolve
 from organisations.models import Publisher, PublisherMembership, MembershipRequest
 from users.models import JournalistProfile
-
+from unittest.mock import patch
+from django.http import HttpResponse
 # Create your tests here.
 
 
@@ -1026,8 +1027,152 @@ class RequestToLeaveTests(TestCase):
         response = self.client.get(self.url)
         
         self.assertEqual(response.status_code, 405)
+
+
+class PublisherLeaveRequestTests(TestCase):
+
+    def setUp(self):
         
-                
+        self.admin_user = User.objects.create_user(
+            username="publisher_admin",
+            password="testpassword123"
+        )
         
-                
+        self.admin_profile = JournalistProfile.objects.create(user=self.admin_user)
+        
+        self.publisher = Publisher.objects.create(name="DAily News")
+        
+        self.admin_membership = PublisherMembership.objects.create(
+            journalist=self.admin_profile,
+            publisher=self.publisher,
+            role="admin",
+            status="active"
+        )
+        
+        self.member_user = User.objects.create_user(
+            username="journalist",
+            password="testpassword123"
+        )
+        
+        self.member_profile = JournalistProfile.objects.create(
+            user=self.member_user
+        )
+        
+        self.member_membership = PublisherMembership.objects.create(
+            journalist=self.member_profile,
+            publisher=self.publisher,
+            role="journalist",
+            status="active"
+        )
+        
+        self.url =reverse("organisations:publisher_leave_requests",
+                          kwargs={"pk": self.publisher.pk})
+        
+        self.client.login(
+            username="publisher_admin",
+            password="testpassword123"
+        )
+        
+    def test_publisher_admin_can_access_leave_requests(self):
+        
+        with patch("organisations.views.render", return_value=HttpResponse()
+                   )as mock_render:
             
+            response = self.client.get(self.url)
+            
+        self.assertEqual(response.status_code, 200)
+        mock_render.assert_called_once()
+        
+        context = mock_render.call_args.args[2]
+        
+        self.assertEqual(context["publisher"], self.publisher)
+        self.assertIn("leave_requests", context)
+        
+    def test_non_admin_cannot_access_leave_requests(self):
+        
+        self.client.login(
+            username="journalist",
+            password="testpassword123"
+        )
+        
+        response = self.client.get(self.url)
+        
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse(
+            "organisations:publisher_detail", kwargs={"pk": self.publisher.pk}
+        ))
+        
+    def test_uanthenticated_user_cannot_leave_requests(self):
+        
+        self.client.logout()
+        
+        response = self.client.get(self.url)
+        
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("login", response.url.lower())
+        
+    def test_only_pending_leave_requests_are_included(self):
+        
+        leave_request = MembershipRequest.objects.create(
+            membership=self.member_membership,
+            journalist=self.member_profile,
+            publisher=self.publisher,
+            request_type="leave",
+            status="pending"
+        )
+        
+        MembershipRequest.objects.create(
+            membership=self.admin_membership,
+            journalist=self.admin_profile,
+            publisher=self.publisher,
+            request_type="join",
+            status="pending"
+        )
+        
+        MembershipRequest.objects.create(
+            membership=self.admin_membership,
+            journalist=self.admin_profile,
+            publisher=self.publisher,
+            request_type="leave",
+            status="approved"
+        )
+        
+        with patch("organisations.views.render", return_value=HttpResponse()
+                   )as mock_render:
+            
+            self.client.get(self.url)
+            
+        context = mock_render.call_args.args[2]
+        requests = list(context["leave_requests"])
+        
+        self.assertEqual(len(requests), 1)
+        self.assertEqual(requests[0], leave_request)
+    
+    def test_request_from_other_publishers_are_excluded(self):
+        
+        other_publisher = Publisher.objects.create(name="Other News")
+        
+        other_membership = PublisherMembership.objects.create(
+            journalist=self.member_profile,
+            publisher=other_publisher,
+            role="journalist",
+            status="active"
+        )
+    
+        other_leave_request = MembershipRequest.objects.create(
+            membership=other_membership,
+            journalist=self.member_profile,
+            publisher=other_publisher,
+            request_type="leave",
+            status="pending"
+        )
+        
+        with patch("organisations.views.render", return_value=HttpResponse()
+                   ) as mock_render:
+            
+            self.client.get(self.url)
+            
+            context = mock_render.call_args.args[2]
+            requests = list(context["leave_requests"])
+            
+            self.assertNotIn(other_leave_request, requests)
