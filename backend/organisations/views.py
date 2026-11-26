@@ -614,7 +614,7 @@ def review_leave_request(request, pk, request_id):
     if decision not in ["approve", "reject"]:
         messages.error(request, "invaild leave request decision.")
         
-        return redirect("publisher_leave_requests", pk=publisher.pk)
+        return redirect("organisations:publisher_leave_requests", pk=publisher.pk)
     
     try:
         
@@ -623,7 +623,7 @@ def review_leave_request(request, pk, request_id):
     except JournalistProfile.DoesNotExist:
         messages.error(request, "you need a journalist profile")
         
-        return redirect("publisher_detail", pk=publisher.pk)
+        return redirect("organisations:publisher_detail", pk=publisher.pk)
     
     try:
         with transaction.atomic():
@@ -640,13 +640,13 @@ def review_leave_request(request, pk, request_id):
             if not admin_membership:
                 messages.error(request, "only a publisher member can review leave requests.")
                 
-                return redirect("publisher_detail", pk=publisher.pk)
+                return redirect("organisations:publisher_detail", pk=publisher.pk)
             
             membership_request = MembershipRequest.objects.select_for_update().get(
                 pk=request_id,
                 membership__publisher=publisher,
                 request_type="leave",
-                staus="pending",
+                status="pending",
                 membership__isnull=False
                 )
             
@@ -658,7 +658,7 @@ def review_leave_request(request, pk, request_id):
             if (membership.status != "active" or membership.pending_request != "leave" or membership.role == "admin"):
                 messages.error(request, "this leave request is no longer valid.")
                 
-                return redirect("publisher_leave_requests", pk=publisher.pk)
+                return redirect("organisations:publisher_leave_requests", pk=publisher.pk)
             
             if decision == "approve":
                 
@@ -674,13 +674,13 @@ def review_leave_request(request, pk, request_id):
                 membership_request.status = "rejected"
                 messages.success(request, "the leave request has been rejected.")
                 
-                membership.pending_request = "join"
-                membership.save(update_fields=["status", "left_at", "pending_request"])
-                
-                membership_request.reviewed_at = timezone.now()
-                membership_request.reviews_by = admin_membership.journalist
-                
-                membership_request.save(update_fields=["status", "reviewed_at", "reviewed_by"])
+            membership.pending_request = ""
+            membership.save(update_fields=["status", "left_at", "pending_request"])
+            
+            membership_request.reviewed_at = timezone.now()
+            membership_request.reviewed_by = admin_membership.journalist
+            
+            membership_request.save(update_fields=["status", "reviewed_at", "reviewed_by"])
 
     except MembershipRequest.DoesNotExist:
         messages.error(request, "the associated membership could not be found.")
@@ -688,7 +688,7 @@ def review_leave_request(request, pk, request_id):
     except PublisherMembership.DoesNotExist:
         messages.error(request, "this associated mebership could not be found.")
         
-    return redirect("publisher_leave requests", pk=publisher.pk)
+    return redirect("organisations:publisher_leave_requests", pk=publisher.pk)
 
 
 @login_required

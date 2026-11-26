@@ -1176,3 +1176,4 @@ class PublisherLeaveRequestTests(TestCase):
             requests = list(context["leave_requests"])
             
             self.assertNotIn(other_leave_request, requests)
+            
